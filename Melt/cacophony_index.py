@@ -20,24 +20,29 @@ def get_ci_bins(source_trim, sample_rate):
     window_c = common.get_window_const(window_size, 'hanning')
     signal = window_c * source_trim
     dct = scipy.fftpack.dct(signal)
-    bassCutOffFreq = 100
-    bassCutOffBand = int(bassCutOffFreq * 2 * window_size / sample_rate)
+    bass_cut_off_frequency = 100
+    bass_cut_off_band = bass_cut_off_frequency * 2 * window_size // sample_rate
 
     edges = numpy.logspace(
-        math.log10(bassCutOffBand),
+        math.log10(bass_cut_off_band),
         math.log10(window_size),
         num=11,
         dtype=int)
-    bins_raw = numpy.split(dct, edges[:-1])
-    return numpy.array([sum(x * x) for x in bins_raw[1:]])
+
+    bins_raw = numpy.split(dct, edges)[1:-1]
+    return numpy.array([sum(x * x) for x in bins_raw])
 
 
-def ScoreFromPoints(points):
-    pointsSorted = sorted(points)
+def score_from_points(points):
+    points_sorted = sorted(points)
     k0 = int(len(points) * 0.75)
     k1 = int(len(points) * 0.95)
-    result = 10 * numpy.mean(pointsSorted[k0:k1])
-    return round(result, 1)
+    return 10 * numpy.mean(points_sorted[k0:k1])
+
+
+def apply_correction_curve_201910B(raw_score):
+    s = raw_score - 10
+    return 100 * s / (s + 18)
 
 
 def calculate(source_file_name):
@@ -63,18 +68,19 @@ def calculate(source_file_name):
     bin_20_width = 312  # ~20 seconds
     table = []
     for q in range(0, len(points) - bin_20_width, bin_20_width):
-        score = ScoreFromPoints(points[q:q + bin_20_width])
-        t0 = int(q * half_window_size / sample_rate + 0.5)
-        t1 = int((q + bin_20_width) * half_window_size / sample_rate + 0.5)
+        raw_score = score_from_points(points[q:q + bin_20_width])
+        score = apply_correction_curve_201910B(raw_score)
+
         entry = {}
-        entry['begin_s'] = t0
-        entry['end_s'] = t1
-        entry['index_percent'] = score
+        entry['begin_s'] = round(q * half_window_size / sample_rate)
+        entry['end_s'] = round(
+            (q + bin_20_width) * half_window_size / sample_rate)
+        entry['index_percent'] = round(score, 1)
         table.append(entry)
 
     result = {}
     result['cacophony_index'] = table
-    result['cacophony_index_version'] = '2019-10-24_A'
+    result['cacophony_index_version'] = '2019-10-24_B'
     if table == []:
         p = source_data.shape[0] / sample_rate
         result['ci_warning'] = 'Cacophony Index requires at least 20 seconds of audio, but only %d seconds of audio were provided.' % p
