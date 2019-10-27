@@ -8,18 +8,32 @@ import json
 import os
 import platform
 
+import numpy
+
 
 class window_helper:
     cache = {}
 
-    def construct_window(width, family):
+    def construct_window(width, family, scale):
+        if family == 'bartlett':
+            return numpy.bartlett(width) * scale
+
+        if family == 'blackman':
+            return numpy.blackman(width) * scale
+
+        if family == 'hamming':
+            return numpy.hamming(width) * scale
+
         if family == 'hanning':
-            import numpy
-            return numpy.hanning(width)
+            return numpy.hanning(width) * scale
+
+        if family == 'kaiser':
+            beta = 14
+            return numpy.kaiser(width, beta) * scale
 
         if family == 'tukey':
             import scipy.signal
-            return scipy.signal.tukey(width)
+            return scipy.signal.tukey(width) * scale
 
     def get_window(key):
         if not key in window_helper.cache:
@@ -28,12 +42,16 @@ class window_helper:
         return window_helper.cache[key]
 
 
-def get_window_const(width, family):
-    return window_helper.get_window((width, family))
+def get_window_const(width, family, scale=1.0):
+    return window_helper.get_window((width, family, scale))
+
+
+def rms(x):
+    """Root-Mean-Square."""
+    return numpy.sqrt(x.dot(x) / x.size)
 
 
 def load_audio_file_as_numpy_array(source_file_name, sample_rate):
-    import numpy
     import shlex
     import subprocess
     command = 'ffmpeg '
