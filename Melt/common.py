@@ -67,6 +67,58 @@ def load_audio_file_as_numpy_array(source_file_name, sample_rate):
     return result
 
 
+def bytesio_from_audio(sample_rate, source_left, source_right):
+    import io
+    import wave
+
+    bio = io.BytesIO()
+    w = wave.open(bio, 'wb')
+    w.setsampwidth(2)
+    w.setframerate(sample_rate)
+    if source_right is None:
+        w.setnchannels(1)
+        source = source_left
+    else:
+        w.setnchannels(2)
+        slr = (source_left, source_right)
+        source = numpy.stack(slr, axis=1)
+    data = (32768 * source)
+    data = numpy.clip(data, -32768, 32767)
+    data = data.astype('<h')
+    w.writeframesraw(data.tostring())
+    w.close()
+    bio.seek(0)
+    return bio
+
+
+def write_audio_to_file(file_name, sample_rate,
+                        source_left, source_right=None):
+    import shlex
+    import subprocess
+
+    if file_name.endswith('.ogg') and source_right is None:
+        # ffmpeg vorbis encoder only stereo
+        source_right = source_left
+
+    bio = bytesio_from_audio(sample_rate, source_left, source_right)
+
+    command = None
+    if file_name.endswith('.ogg'):
+        command = 'ffmpeg -y -i - -c:a vorbis -strict -2 %s' % file_name
+
+    if command:
+        print(command)
+        p = subprocess.Popen(
+            shlex.split(command),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        p.communicate(input=bio.read())
+    else:
+        with open(file_name, 'wb') as f:
+            f.write(bio.read())
+
+
 def get_os_short_name():
     """Get the short form name of the operating system, either lnx, mac or win."""
     if platform.system() == 'Darwin':
