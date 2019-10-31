@@ -34,6 +34,9 @@ def setup():
     print(cmd)
     cmd = venv_prefix + ' pip install numpy scipy'
     print(cmd)
+    ptf = 'tensorflow' if osn == 'mac' else 'tensorflow-gpu'
+    cmd = venv_prefix + ' pip install %s' % ptf
+    print(cmd)
     print(venv_prefix)
 
 
