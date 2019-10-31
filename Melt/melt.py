@@ -56,7 +56,7 @@ def main():
     suffix = argv[1].split('.')[-1].lower()
     if suffix in '3gp,aac,ac3,adts,aif,aifc,caf,dts,dtshd,flac,gsm,m4a,mp3,mpa,oga,ogg,ra,rif,wav'.split(
             ','):
-        cmd = '%s python chain.py -cacophony_index %s' % (venv_prefix, argv[1])
+        cmd = '%s python chain.py -examine %s' % (venv_prefix, argv[1])
         common.execute(cmd)
         return 0
 
