@@ -24,6 +24,10 @@ class window_helper:
         if family == 'hamming':
             return numpy.hamming(width) * scale
 
+        if family == 'hann':
+            import scipy.signal
+            return scipy.signal.hann(width) * scale
+
         if family == 'hanning':
             return numpy.hanning(width) * scale
 
