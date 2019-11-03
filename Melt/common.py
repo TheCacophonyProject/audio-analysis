@@ -11,6 +11,13 @@ import platform
 import numpy
 
 
+def check_python_version():
+    import sys
+    if sys.version_info[0] < 3:
+        print('python version 2 not supported, try activate virtualenv or run setup.')
+        sys.exit()
+
+
 class window_helper:
     cache = {}
 
@@ -47,6 +54,7 @@ class window_helper:
 
 
 def get_window_const(width, family, scale=1.0):
+    check_python_version()
     return window_helper.get_window((width, family, scale))
 
 
