@@ -6,13 +6,13 @@
 
 import json
 import os
+import sys
 import platform
 
 import numpy
 
 
 def check_python_version():
-    import sys
     if sys.version_info[0] < 3:
         print('python version 2 not supported, try activate virtualenv or run setup.')
         sys.exit()
@@ -146,7 +146,15 @@ def get_config_dir():
     return 'venv_' + get_os_short_name()
 
 
+def already_inside_venv():
+    if hasattr(sys, 'base_prefix'):
+        return (sys.base_prefix != sys.prefix)
+    return hasattr(sys, 'real_prefix')
+
+
 def get_venv_prefix():
+    if already_inside_venv():
+        return ''
     if get_os_short_name() == 'win':
         return '%s\\Scripts\\activate.bat &&' % get_config_dir()
     return '. %s/bin/activate &&' % get_config_dir()
