@@ -67,7 +67,12 @@ def calculate(source_file_name):
 
     bin_20_width = 312  # ~20 seconds
     table = []
-    for q in range(0, len(points) - bin_20_width, bin_20_width):
+    entry_count = (len(points) + 31) // bin_20_width
+    for e in range(entry_count):
+        q = 0
+        if entry_count:
+            q = e * (len(points) - bin_20_width) // (entry_count - 1)
+
         raw_score = score_from_points(points[q:q + bin_20_width])
         score = apply_correction_curve_201910B(raw_score)
 
@@ -80,7 +85,7 @@ def calculate(source_file_name):
 
     result = {}
     result['cacophony_index'] = table
-    result['cacophony_index_version'] = '2019-10-24_B'
+    result['cacophony_index_version'] = '2019-11-05_A'
     if table == []:
         p = source_data.shape[0] / sample_rate
         result['ci_warning'] = 'Cacophony Index requires at least 20 seconds of audio, but only %d seconds of audio were provided.' % p
