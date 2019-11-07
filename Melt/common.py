@@ -147,9 +147,11 @@ def get_config_dir():
 
 
 def already_inside_venv():
+    if hasattr(sys, 'real_prefix'):
+        return True
     if hasattr(sys, 'base_prefix'):
         return (sys.base_prefix != sys.prefix)
-    return hasattr(sys, 'real_prefix')
+    return False
 
 
 def get_venv_prefix():
