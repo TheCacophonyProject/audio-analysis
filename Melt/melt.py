@@ -50,6 +50,13 @@ def setup():
     print(venv_prefix)
 
 
+def pex():
+    import os
+    #os.system('pip install pex')
+    cmd = 'pex . -c pex_entry.py -o melt.pex'
+    os.system(cmd)
+
+
 def main():
     """Main entrypoint for Melt, in normal usage, everything starts here."""
 
@@ -59,6 +66,10 @@ def main():
 
     if len(argv) == 1:
         show_help()
+        return 0
+
+    if argv[1] == 'pex':
+        pex()
         return 0
 
     if argv[1] == 'setup':

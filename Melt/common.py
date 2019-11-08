@@ -154,6 +154,11 @@ def already_inside_venv():
     return False
 
 
+def get_source_prefix():
+    source_path = os.path.dirname(os.path.abspath(__file__)) + '/'
+    return source_path
+
+
 def get_venv_prefix():
     if already_inside_venv():
         return ''

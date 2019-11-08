@@ -45,7 +45,8 @@ class ensemble:
         import os
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '4'
         import tensorflow
-        model = tensorflow.keras.models.load_model(
-            'model/model_%s.h5' % flavor)
+        prefix = common.get_source_prefix()
+        model_name = '%smodel/model_%s.h5' % (prefix, flavor)
+        model = tensorflow.keras.models.load_model(model_name)
         npx = numpy.array(self.xList)
         return model.predict(npx)

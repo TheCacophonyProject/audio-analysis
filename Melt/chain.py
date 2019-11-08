@@ -48,6 +48,15 @@ def speech_detect(source, nr, squawks, sample_rate):
     return result
 
 
+def examine(file_name, summary):
+    import cacophony_index
+    ci = cacophony_index.calculate(file_name)
+    summary.update(ci)
+    nss = find_nr_squawks_from_file_name(file_name)
+    summary.update(speech_detect(*nss))
+    summary.update(species_identify(*nss))
+
+
 def main():
     argv = sys.argv
 
@@ -60,12 +69,7 @@ def main():
         ci = cacophony_index.calculate(argv[2])
         summary.update(ci)
     elif argv[1] == '-examine':
-        import cacophony_index
-        ci = cacophony_index.calculate(argv[2])
-        summary.update(ci)
-        nss = find_nr_squawks_from_file_name(argv[2])
-        summary.update(speech_detect(*nss))
-        summary.update(species_identify(*nss))
+        examine(argv[2], summary)
     elif argv[1] == '-noise_reduce':
         (source, nr, sample_rate) = noise_reduce(argv[2])
         common.write_audio_to_file(

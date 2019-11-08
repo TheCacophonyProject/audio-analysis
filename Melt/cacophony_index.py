@@ -70,7 +70,7 @@ def calculate(source_file_name):
     entry_count = (len(points) + 31) // bin_20_width
     for e in range(entry_count):
         q = 0
-        if entry_count:
+        if e:
             q = e * (len(points) - bin_20_width) // (entry_count - 1)
 
         raw_score = score_from_points(points[q:q + bin_20_width])
