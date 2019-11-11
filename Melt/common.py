@@ -46,6 +46,8 @@ class window_helper:
             import scipy.signal
             return scipy.signal.tukey(width) * scale
 
+        print('window family %s not supported' % family)
+
     def get_window(key):
         if not key in window_helper.cache:
             window_helper.cache[key] = window_helper.construct_window(*key)
@@ -165,6 +167,16 @@ def get_venv_prefix():
     if get_os_short_name() == 'win':
         return '%s\\Scripts\\activate.bat &&' % get_config_dir()
     return '. %s/bin/activate &&' % get_config_dir()
+
+
+def copy_file(source_file_name, dest_file_name):
+    import shutil
+    shutil.copyfile(source_file_name, dest_file_name)
+
+
+def mkdir_safe(dir_name):
+    import os
+    os.makedirs(dir_name, exist_ok=True)
 
 
 def execute(command):

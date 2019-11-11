@@ -45,8 +45,6 @@ def setup():
     print(cmd)
     cmd = venv_prefix + ' pip install tensorflow-gpu'
     print(cmd)
-    cmd = venv_prefix + ' pip install seaborn pandas matplotlib'
-    print(cmd)
     print(venv_prefix)
 
 
@@ -78,8 +76,11 @@ def main():
 
     suffix = argv[1].split('.')[-1].lower()
     exts = '3gp,aac,ac3,adts,aif,aifc,caf,dts,dtshd,flac,gsm,m4a,mp3,mp4,mpa,oga,ogg,ra,rif,wav'
+
+    source_prefix = common.get_source_prefix()
+    vpchain_command = '%s python %schain.py ' % (venv_prefix, source_prefix)
     if suffix in exts.split(','):
-        cmd = '%s python chain.py -examine "%s"' % (venv_prefix, argv[1])
+        cmd = '%s-examine "%s"' % (vpchain_command, argv[1])
         common.execute(cmd)
         return 0
 

@@ -28,7 +28,39 @@ def find_nr_squawks_from_file_name(file_name):
 
 
 def species_identify(source, nr, squawks, sample_rate):
+    import json
+    import numpy
+    import squawk
+
+    e = ensemble.ensemble()
+    for s in squawks:
+        waveform = squawk.extract_squawk_waveform(nr, sample_rate, s)
+        e.append_waveform(waveform)
+    p = e.apply_model('sc_aa')
+
+    with open('model/model_sc_aa_label.json', 'r') as f:
+        label = json.loads(f.read())
+
+    tag = []
+    for row, squawk in zip(p, squawks):
+        mm = numpy.argmax(row)
+        m2 = numpy.argsort(row)[-2]
+        if row[mm] < 0.75:
+            continue
+        if row[m2] > 0.3:
+            continue
+        species = label[mm]
+        if species in 'noise,unknown'.split(','):
+            continue
+
+        entry = {}
+        entry['species'] = species
+        entry['begin_s'] = round(squawk['begin_i'] / sample_rate, 2)
+        entry['end_s'] = round(squawk['end_i'] / sample_rate, 2)
+        tag.append(entry)
     result = {}
+    result['species_identify'] = tag
+    result['species_identify_version'] = '2019-11-11_A'
     return result
 
 
