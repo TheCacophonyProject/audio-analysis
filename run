@@ -1,0 +1,12 @@
+#!/bin/bash
+
+source="$1"
+if [[ ! -f $source ]]; then
+   echo "Please specify an audio file"
+   exit 1
+fi
+
+dir=$(readlink -f "$(dirname "$source")")
+filename=$(basename "$source")
+
+docker run -it -v "$dir":/io cacophonyproject/audio-analysis /io/"$filename"
