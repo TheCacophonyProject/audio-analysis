@@ -3,7 +3,42 @@
 
 # Copyright (C) 2019 Chris Blackbourn
 
-"""Compute the Cacophony Index for an audio file."""
+"""Compute the Cacophony Index for an audio file.
+
+The Cacophony Index of an audio file is a measure of the health of the
+local ecosystem nearby the recorder.
+
+The Index is a number between 0 and 100, where values less than 50
+suggest night time, and values greater than 50 are expected during the daytime.
+
+It works by measuring the change in energy at different frequency bands.
+If the energy levels arei changing rapidly it means there is more information in the recording.
+More information in the recording normally means a healthier avian ecosystem.
+
+The index is designed to be robust against many types of noise,
+such as wind, rain, aircraft engines and other common non-animal sounds.
+
+It assumes the audio is from a recorder outdoors in a natural setting,
+away from non-natural sound sources, such as music, motorbikes or talking,
+any of which can produce very high Cacophony Index numbers in the 80s and 90s.
+
+Some natural sounds, such as ocean waves or water dripping in a repeated pattern,
+will also confuse the index, so care must be taken if abnormally high
+cacophony index numbers are reported.
+
+On a technical level, starting with 20 seconds of digital audio sampled at 16kHz,
+we slice the audio into 312 overlapping bins. We then use a version of the
+FFT algorithm to turn the data into the frequency domain.
+The frequency data is further grouped into 10 frequency bands,
+somewhat similar to a Mel spectrogram. Energy changes across the bins
+are then compared and scored in a robust manner to meet our
+background noise design goals.
+
+The Cacophony Index 2019 is a work in progress.
+As we continue to collect more data, and our understanding of ecosystem health changes,
+from time to time we may update the index to better process the recordings we have,
+and provide even better estimates of local ecosystem health.
+"""
 
 import json
 import math
