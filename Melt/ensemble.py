@@ -9,10 +9,11 @@ import numpy
 import common
 
 
-def pre_norm_tf(s, scale=1.0):
+def pre_norm_tf(s, scale=1.0, slide=0):
     target_width = 32768
 
     adjust_pre = target_width // 2 - s.shape[0] // 2
+    adjust_pre += slide
 
     if adjust_pre < 0:
         s = s[-adjust_pre:target_width - adjust_pre]
