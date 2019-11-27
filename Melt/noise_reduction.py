@@ -4,11 +4,7 @@
 
 """Noise reduction."""
 
-import bisect
-import json
 import numpy
-import os
-import platform
 import scipy
 
 import common
