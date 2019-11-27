@@ -35,6 +35,7 @@ def setup():
 
     if osn == 'mac':
         print('brew install ffmpeg')
+        # print('brew install opus-tools') #optional
 
     if osn == 'win':
         print('Install https://www.ffmpeg.org/download.html')
@@ -75,7 +76,7 @@ def main():
         return 0
 
     suffix = argv[1].split('.')[-1].lower()
-    exts = '3gp,aac,ac3,adts,aif,aifc,caf,dts,dtshd,flac,gsm,m4a,mp3,mp4,mpa,oga,ogg,ra,rif,wav'
+    exts = '3gp,aac,ac3,adts,aif,aifc,caf,dts,dtshd,flac,gsm,m4a,mp3,mp4,mpa,oga,ogg,opus,ra,rif,wav'
 
     source_prefix = common.get_source_prefix()
     vpchain_command = '%s python %schain.py ' % (venv_prefix, source_prefix)

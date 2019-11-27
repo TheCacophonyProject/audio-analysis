@@ -68,16 +68,28 @@ def rms(x):
 def load_audio_file_as_numpy_array(source_file_name, sample_rate):
     import shlex
     import subprocess
+    channel_count = 1
+
     command = 'ffmpeg '
     command += '-i "%s" ' % source_file_name
     command += '-ar %d ' % sample_rate
-    command += '-f f32le -c:a pcm_f32le -ac 1 - '
+    command += '-f f32le -c:a pcm_f32le -ac %d - ' % channel_count
+
+    if source_file_name.endswith('.opus'):
+        command = 'opusdec --float --quiet '
+        command += '--rate %d ' % sample_rate
+        command += '--force-stereo '
+        command += '"%s" -' % source_file_name
+        channel_count = 2
 
     args = shlex.split(command)
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (stdout, stderr) = p.communicate()
 
     result = numpy.frombuffer(stdout, dtype=numpy.dtype('<f'))
+    if channel_count != 1:
+        result = numpy.mean(result.reshape(-1, 2), axis=1)
+
     return result
 
 
@@ -105,6 +117,13 @@ def bytesio_from_audio(sample_rate, source_left, source_right):
     return bio
 
 
+def play_audio(data, sample_rate):
+    import simpleaudio
+    data = numpy.clip(32768 * data, -32768, 32767)
+    data = data.astype('=h')
+    return simpleaudio.play_buffer(data, 1, 2, sample_rate)
+
+
 def write_audio_to_file(file_name, sample_rate,
                         source_left, source_right=None):
     import shlex
@@ -117,11 +136,16 @@ def write_audio_to_file(file_name, sample_rate,
     bio = bytesio_from_audio(sample_rate, source_left, source_right)
 
     command = None
+    if file_name.endswith('.mp3'):
+        command = 'ffmpeg -y -i - -c:a libmp3lame %s' % file_name
+
     if file_name.endswith('.ogg'):
         command = 'ffmpeg -y -i - -c:a vorbis -strict -2 %s' % file_name
 
+    if file_name.endswith('.opus'):
+        command = 'opusenc - %s' % file_name
+
     if command:
-        print(command)
         p = subprocess.Popen(
             shlex.split(command),
             stdin=subprocess.PIPE,
