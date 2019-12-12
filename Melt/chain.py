@@ -27,7 +27,7 @@ def find_nr_squawks_from_file_name(file_name):
     return (source, nr, squawks, sample_rate)
 
 
-def species_identify(source, nr, squawks, sample_rate):
+def species_identify(source, nr, squawks, sample_rate, verbose=False):
     import json
     import numpy
     import squawk
@@ -36,31 +36,37 @@ def species_identify(source, nr, squawks, sample_rate):
     for s in squawks:
         waveform = squawk.extract_squawk_waveform(nr, sample_rate, s)
         e.append_waveform(waveform)
-    p = e.apply_model('sc_aa')
+    model_version = 'sc_ah'
+    p = e.apply_model(model_version)
 
-    with open('model/model_sc_aa_label.json', 'r') as f:
+    label_file_name = 'model/model_%s_label.json' % model_version
+    with open(label_file_name, 'r') as f:
         label = json.loads(f.read())
 
     tag = []
     for row, squawk in zip(p, squawks):
         mm = numpy.argmax(row)
         m2 = numpy.argsort(row)[-2]
-        if row[mm] < 0.75:
-            continue
-        if row[m2] > 0.3:
-            continue
         species = label[mm]
-        if species in 'noise,unknown'.split(','):
-            continue
+        if not verbose:
+            if row[mm] < 0.75:
+                continue
+            if row[m2] > 0.3:
+                continue
+            if species in 'noise,other,unknown'.split(','):
+                continue
 
         entry = {}
         entry['species'] = species
         entry['begin_s'] = round(squawk['begin_i'] / sample_rate, 2)
         entry['end_s'] = round(squawk['end_i'] / sample_rate, 2)
+        if verbose:
+            entry['confidence'] = '%d%%' % (100 * row[mm])
+            entry['or'] = '%s (%d%%)' % (label[m2], 100 * row[m2])
         tag.append(entry)
     result = {}
     result['species_identify'] = tag
-    result['species_identify_version'] = '2019-11-11_A'
+    result['species_identify_version'] = '2019-12-12_A'
     return result
 
 
