@@ -43,6 +43,8 @@ class ensemble:
         self.xList.append(pre_norm_tf(waveform))
 
     def apply_model(self, flavor):
+        if not self.xList:
+            return []
         import os
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '4'
         import tensorflow
