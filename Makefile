@@ -1,12 +1,14 @@
+hub_repo := cacophonyproject/audio-analysis
+
 .PHONY: docker
 docker:
-	docker build -t audio-analysis .
+	docker build -t $(hub_repo) .
 
 .PHONY: docker-no-cache
 docker-no-cache:
-	docker build --no-cache -t audio-analysis .
+	docker build --no-cache -t $(hub_repo) .
 
-.PHONY: docker-release
-docker-release: docker
-	docker tag audio-analysis cacophonyproject/audio-analysis:latest
-	docker push cacophonyproject/audio-analysis:latest
+.PHONY: docker-push
+docker-push: docker
+	docker tag $(hub_repo) $(hub_repo):$(TAG)
+	docker push $(hub_repo):$(TAG)
