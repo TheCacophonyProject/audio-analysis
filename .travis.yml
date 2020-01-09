@@ -11,8 +11,6 @@ script: /bin/true
 deploy:
   - provider: script
     skip_cleanup: true
-    script:
-        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        - make TAG="$TRAVIS_TAG" docker-push
+    script: ./docker-push
     on:
       tags: true
