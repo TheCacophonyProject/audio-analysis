@@ -75,9 +75,9 @@ def score_from_points(points):
     return 10 * numpy.mean(points_sorted[k0:k1])
 
 
-def apply_correction_curve_201910B(raw_score):
+def apply_correction_curve_202001C(raw_score):
     s = raw_score - 10
-    return 100 * s / (s + 18)
+    return max(100 * s / (s + 18), 0)
 
 
 def calculate(source_file_name):
@@ -109,7 +109,7 @@ def calculate(source_file_name):
             q = e * (len(points) - bin_20_width) // (entry_count - 1)
 
         raw_score = score_from_points(points[q:q + bin_20_width])
-        score = apply_correction_curve_201910B(raw_score)
+        score = apply_correction_curve_202001C(raw_score)
 
         entry = {}
         entry['begin_s'] = round(q * half_window_size / sample_rate)
@@ -120,7 +120,7 @@ def calculate(source_file_name):
 
     result = {}
     result['cacophony_index'] = table
-    result['cacophony_index_version'] = '2019-11-05_A'
+    result['cacophony_index_version'] = '2020-01-20_A'
     if table == []:
         p = source_data.shape[0] / sample_rate
         result['ci_warning'] = 'Cacophony Index requires at least 20 seconds of audio, but only %d seconds of audio were provided.' % p
