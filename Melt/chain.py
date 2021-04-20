@@ -36,10 +36,8 @@ def main():
         import cacophony_index
         ci = cacophony_index.calculate(argv[2])
         summary.update(ci)
-    elif argv[1] == '-examine':
-        examine(argv[2], argv[3], argv[4], summary)
     else:
-        result = -1
+        examine(argv[1], argv[2], argv[3], summary)
 
     t1 = time.time()
 

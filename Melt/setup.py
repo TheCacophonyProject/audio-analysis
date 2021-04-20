@@ -1,16 +1,14 @@
 from distutils.core import setup
 
 scripts = [
-    'pex_entry.py',
     'cacophony_index.py',
-    'common.py',
     'chain.py',
-    'ensemble.py',
-    'noise_reduction.py',
-    'squawk.py',
+    'common.py',
+    'identify_species.py',
 ]
 
 reqs = [
+    'librosa',
     'numpy',
     'scipy',
     'tensorflow',
