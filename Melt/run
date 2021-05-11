@@ -1,5 +1,4 @@
 #!/bin/sh
 
 cd `dirname $0`
-echo $0
 exec python3 chain.py "$1" "$2" "$3"
