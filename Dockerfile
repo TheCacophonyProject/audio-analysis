@@ -5,7 +5,7 @@ FROM jrottenberg/ffmpeg:3.4-ubuntu
 RUN apt-get update && \
   apt-get install -qyy \
     -o APT::Install-Recommends=false -o APT::Install-Suggests=false \
-    python3 python3-distutils curl ca-certificates
+    python3 python3-distutils curl ca-certificates libsndfile1
 
 RUN curl -q https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
   python3 get-pip.py --quiet --no-cache-dir

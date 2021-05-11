@@ -10,3 +10,23 @@ More details here:
 If you are running any branch or fork of Cacophony Project's audio-analysis code,
 be sure to confirm the origin of any tensorflow model you run,
 and take precautions accordingly..
+
+
+# Development
+
+Build the docker image
+`docker build -t cacophony-audio .`
+
+Then run it with the parameters:
+* base_dir - base directory
+* audio-file - audio file relative to base_dir
+* metadata-file- meta file relative to base_dir (not used at the moment)
+* path to models- path to models directory contains (model1, model2, and model3) relative to base_dir
+
+`docker run -it -v {base_dir}:/io cacophony-audio /io/{audio-file} /io{metadata-file} /io/{path to models}`
+
+
+# Release
+Make a tag on GitHub
+This will push a docker image to docker.io to use this image update cacophony-processing tag version
+To run on docker image use the following command
