@@ -3,8 +3,6 @@ import numpy as np
 import os
 import tensorflow as tf
 
-print(tf.__version__)
-
 frequency_min = 600
 frequency_max = 1200
 num_bands = int((frequency_max - frequency_min) / 10)
