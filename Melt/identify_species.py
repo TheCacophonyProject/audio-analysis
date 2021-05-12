@@ -1,8 +1,8 @@
-
 import librosa
 import numpy as np
 import os
 import tensorflow as tf
+
 print(tf.__version__)
 
 frequency_min = 600
@@ -15,7 +15,7 @@ sample_slide_seconds = 1.0
 sample_slide_slices = int(sample_slide_seconds * slices_per_second)
 activation_threshold = 1.0
 
-model_file_name = 'saved_model.pb'
+model_file_name = "saved_model.pb"
 
 
 def _load_sample(path):
@@ -24,9 +24,10 @@ def _load_sample(path):
     # generate spectrogram
     nfft = int(sr / 10)
     stft = librosa.stft(frames, n_fft=nfft, hop_length=int(nfft / 2))
-    npspec = np.abs(stft)[int(frequency_min / 10):int(frequency_max / 10)]
+    npspec = np.abs(stft)[int(frequency_min / 10) : int(frequency_max / 10)]
 
     return sr, npspec
+
 
 def _model_paths(basepath):
     namelist = os.listdir(basepath)
@@ -38,6 +39,7 @@ def _model_paths(basepath):
         elif namepath.endswith(model_file_name):
             pathlist.append(basepath)
     return pathlist
+
 
 def _find_likely_span(liklihoods, start_times, first, last):
     """
@@ -65,47 +67,69 @@ def _find_likely_span(liklihoods, start_times, first, last):
     elif count == 1:
         # two consecutive samples, assume call in the overlap span and return maximum liklihood with that span
         liklihood = max(liklihoods[first], liklihoods[last])
-        return liklihood, first_start_time + sample_slide_seconds, first_start_time + seconds_per_sample
+        return (
+            liklihood,
+            first_start_time + sample_slide_seconds,
+            first_start_time + seconds_per_sample,
+        )
     elif count == 2:
         # three consecutive samples, probably two calls if max likelihood are the two end values
-        max_liklihood = max(liklihoods[first:last + 1])
-        min_liklihood = min(liklihoods[first:last + 1])
+        max_liklihood = max(liklihoods[first : last + 1])
+        min_liklihood = min(liklihoods[first : last + 1])
         if max_liklihood == liklihoods[first + 1]:
             # maximum liklihood is middle sample, assume that's where the call actually is
-            return max_liklihood, start_times[first+1], start_times[first+1] + seconds_per_sample
+            return (
+                max_liklihood,
+                start_times[first + 1],
+                start_times[first + 1] + seconds_per_sample,
+            )
         elif min_liklihood == liklihoods[first]:
             # lowest liklihood is the first sample, so assume call probably in overlap and perhaps a second one present
-            return max_liklihood, start_times[first+1], last_end_time
+            return max_liklihood, start_times[first + 1], last_end_time
         elif min_liklihood == liklihoods[last]:
             # lowest liklihood is the last sample, so assume call probably in first and perhaps a second one present
-            return max_liklihood, first_start_time, start_times[first+1] + seconds_per_sample
+            return (
+                max_liklihood,
+                first_start_time,
+                start_times[first + 1] + seconds_per_sample,
+            )
         else:
             # no good guessing, just return the full span
             return max_liklihood, first_start_time, last_end_time
     else:
         # more than three consecutive samples, just see if we can safely trim the non-overlapping end spans
-        max_liklihood = max(liklihoods[first:last + 1])
+        max_liklihood = max(liklihoods[first : last + 1])
         if max_liklihood > liklihoods[first]:
             if max_liklihood > liklihoods[last]:
                 # first and last not highest likelihood, trim off the non-overlapping end spans
-                return max_liklihood, start_times[first+1], start_times[last-1] + seconds_per_sample
+                return (
+                    max_liklihood,
+                    start_times[first + 1],
+                    start_times[last - 1] + seconds_per_sample,
+                )
             else:
                 # last is highest likelihood, just trim off non-overlapping start
-                return max_liklihood, start_times[first+1], last_end_time
+                return max_liklihood, start_times[first + 1], last_end_time
         elif max_liklihood > liklihoods[last]:
             # first is highest likelihood, last is not, just trim off non-overlapping end
-            return max_liklihood, first_start_time, start_times[last-1] + seconds_per_sample
+            return (
+                max_liklihood,
+                first_start_time,
+                start_times[last - 1] + seconds_per_sample,
+            )
         else:
             # first and last both highest likelihood, just return the entire time
             return max_liklihood, first_start_time, last_end_time
 
+
 def build_entry(begin, end, species, activation):
     entry = {}
-    entry['begin_s'] = begin
-    entry['end_s'] = end
-    entry['species'] = species
-    entry['liklihood'] = round(activation * 0.01, 2)
+    entry["begin_s"] = begin
+    entry["end_s"] = end
+    entry["species"] = species
+    entry["liklihood"] = round(activation * 0.01, 2)
     return entry
+
 
 def identify_species(recording, metadata, models):
 
@@ -147,11 +171,15 @@ def identify_species(recording, metadata, models):
             last_index = i
         elif first_index >= 0:
             # just past the end of a sample range with activations, record it and clear
-            liklihood, start_time, end_time = _find_likely_span(liklihoods, start_times, first_index, last_index)
-            labels.append(build_entry(start_time, end_time, 'morepork', liklihood))
+            liklihood, start_time, end_time = _find_likely_span(
+                liklihoods, start_times, first_index, last_index
+            )
+            labels.append(build_entry(start_time, end_time, "morepork", liklihood))
             first_index = -1
     if first_index >= 0:
         # record final sample range with activations
-        liklihood, start_time, end_time = _find_likely_span(liklihoods, start_times, first_index, last_index)
-        labels.append(build_entry(start_time, end_time, 'morepork', liklihood))
+        liklihood, start_time, end_time = _find_likely_span(
+            liklihoods, start_times, first_index, last_index
+        )
+        labels.append(build_entry(start_time, end_time, "morepork", liklihood))
     return labels

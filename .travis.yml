@@ -6,7 +6,11 @@ python: 3.6
 services:
   - docker
 
-script: /bin/true
+before_script:
+- pip install black
+
+script:
+- find -name '*.py' | xargs black --target-version=py36 --check --diff
 
 deploy:
   - provider: script
