@@ -144,8 +144,10 @@ def identify_species(recording, metadata, models):
         start = limit - slices_per_sample
         start_times.append(start / slices_per_second)
         sample = npspec[:, start:limit]
+
         sample = librosa.amplitude_to_db(sample, ref=np.max)
-        sample = sample / abs(sample.min()) + 1.0
+        if sample.min() != 0:
+            sample = sample / abs(sample.min()) + 1.0
         samples.append(sample.reshape(sample.shape + (1,)))
     samples = np.array(samples)
 
