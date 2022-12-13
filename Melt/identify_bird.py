@@ -60,7 +60,6 @@ def load_samples(path):
 
 def load_model(model_path):
     logging.debug("Loading %s", model_path)
-
     model_path = Path(model_path)
     model = tf.keras.models.load_model(model_path)
     model.load_weights(model_path / "val_accuracy").expect_partial()
@@ -101,7 +100,6 @@ def classify(file, model_file):
         start += SEG_STRIDE
 
     if track is not None:
-        print("end is", length)
         track.end = length
         track.confidences.append(best_p)
         tracks.append((track))
