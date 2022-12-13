@@ -14,7 +14,18 @@ from identify_bird import classify
 
 
 def species_identify(file_name, metadata_name, models, bird_model):
+    print(
+        "values are",
+        file_name,
+        "meta ",
+        metadata_name,
+        "models ",
+        models,
+        "bird model ",
+        bird_model,
+    )
     labels = identify_species(file_name, metadata_name, models)
+
     other_labels = classify(file_name, bird_model)
     other_labels = [other for other in other_labels if other["species"] != "human"]
     labels.extend(other_labels)
