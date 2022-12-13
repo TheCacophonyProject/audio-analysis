@@ -4,4 +4,4 @@ numpy~=1.23.0
 scipy~=1.9.3
 tensorflow~=2.10.1
 Wave~=0.0.2
-numba==0.48
+numba
