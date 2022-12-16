@@ -125,7 +125,7 @@ def build_entry(begin, end, species, activation):
     entry["begin_s"] = begin
     entry["end_s"] = end
     entry["species"] = species
-    entry["liklihood"] = round(activation * 0.01, 2)
+    entry["likelihood"] = round(activation * 0.01, 2)
     return entry
 
 
@@ -156,7 +156,7 @@ def identify_species(recording, metadata, models):
     model_paths = _model_paths(models)
     for path in model_paths:
         model = tf.keras.models.load_model(path)
-        activations = model.predict(samples).flatten()
+        activations = model.predict(samples, verbose=0).flatten()
         activations_sum += activations
 
     # generate labels from summed activations

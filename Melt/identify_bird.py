@@ -74,7 +74,7 @@ def classify(file, model_file):
     samples, length = load_samples(file)
     model, meta = load_model(model_file)
     labels = meta.get("labels")
-    predictions = model.predict(samples)
+    predictions = model.predict(samples, verbose=0)
 
     track = None
     tracks = []
@@ -104,7 +104,6 @@ def classify(file, model_file):
         track.confidences.append(best_p)
         tracks.append((track))
 
-    logging.info("Got tracks %s", [t.get_meta() for t in tracks])
     return [t.get_meta() for t in tracks]
 
 
