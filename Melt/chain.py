@@ -10,22 +10,27 @@ import time
 
 import common
 from identify_species import identify_species
+from identify_bird import classify
 
 
-def species_identify(file_name, metadata_name, models):
+def species_identify(file_name, metadata_name, models, bird_model):
+
     labels = identify_species(file_name, metadata_name, models)
+    other_labels = classify(file_name, bird_model)
+    other_labels = [other for other in other_labels if other["species"] != "human"]
+    labels.extend(other_labels)
     result = {}
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
-def examine(file_name, metadata_name, models, summary):
+def examine(file_name, metadata_name, models, other_model, summary):
     import cacophony_index
 
     ci = cacophony_index.calculate(file_name)
     summary.update(ci)
-    summary.update(species_identify(file_name, metadata_name, models))
+    summary.update(species_identify(file_name, metadata_name, models, other_model))
 
 
 def main():
@@ -41,7 +46,7 @@ def main():
         ci = cacophony_index.calculate(argv[2])
         summary.update(ci)
     else:
-        examine(argv[1], argv[2], argv[3], summary)
+        examine(argv[1], argv[2], argv[3], argv[4], summary)
 
     t1 = time.time()
 
