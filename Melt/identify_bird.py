@@ -6,8 +6,6 @@ import logging
 import sys
 import json
 
-SEG_LENGTH = 3
-SEG_STRIDE = 1
 
 fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 
@@ -16,12 +14,12 @@ logging.basicConfig(
 )
 
 
-def load_samples(path):
+def load_samples(path, segment_length, stride, hop_length=640):
     frames, sr = librosa.load(path, sr=None)
     mels = []
     i = 0
     n_fft = sr // 10
-    hop_length = 640  # feature frame rate of 75
+    # hop_length = 640  # feature frame rate of 75
 
     mel_all = librosa.feature.melspectrogram(
         y=frames,
@@ -33,15 +31,15 @@ def load_samples(path):
         n_mels=80,
     )
     mel_all = librosa.power_to_db(mel_all, ref=np.max)
-    mel_sample_size = int(1 + SEG_LENGTH * sr / hop_length)
-    jumps_per_stride = int(mel_sample_size / 3.0)
+    mel_sample_size = int(1 + segment_length * sr / hop_length)
+    jumps_per_stride = int(mel_sample_size / segment_length)
 
     length = mel_all.shape[1]
     end = 0
     mel_samples = []
     i = 0
     while end < length:
-        start = int(jumps_per_stride * (i * SEG_STRIDE))
+        start = int(jumps_per_stride * (i * stride))
         end = start + mel_sample_size
         mel = mel_all[:, start:end].copy()
         mel_m = tf.reduce_mean(mel, axis=1)
@@ -70,39 +68,62 @@ def load_model(model_path):
 
 
 def classify(file, model_file):
-    global SEG_LENGTH, SEG_STRIDE
-    samples, length = load_samples(file)
     model, meta = load_model(model_file)
     labels = meta.get("labels")
+    multi_label = meta.get("multi_label")
+    segment_length = meta.get("segment_length", 3)
+    segment_stride = meta.get("segment_stride", 1.5)
+
+    segment_stride = meta.get("hop_length", 640)
+    samples, length = load_samples(file, segment_length, segment_stride, hop_length)
     predictions = model.predict(samples, verbose=0)
 
-    track = None
     tracks = []
     start = 0
+    active_tracks = {}
     for prediction in predictions:
-        best_i = np.argmax(prediction)
-        best_p = prediction[best_i]
-        label = labels[best_i]
-        if best_p > 0.7:
+        results = []
+        track_labels = []
+        if multi_label:
+            for i, p in enumerate(prediction):
+                if p > 0.7:
+                    label = labels[i]
+                    results.append((p, label))
+                    track_labels.append(label)
+        else:
+            best_i = np.argmax(prediction)
+            best_p = prediction[best_i]
+            if best_p > 0.7:
+                label = labels[best_i]
+                results.append((best_p, label))
+                track_labels.append(label)
+
+        # remove tracks that have ended
+        existing_tracks = list(active_tracks.keys())
+        for existing in existing_tracks:
+            track = active_tracks[existing]
+            if track.label not in track_labels:
+                track.end = track.end - segment_stride
+                del active_tracks[track.label]
+
+        for r in results:
+            label = r[1]
+            track = active_tracks.get(label, None)
             if track is None:
-                track = Track(label, start, start + SEG_LENGTH, best_p)
-            elif track.label != label:
-                track.end = start
-                tracks.append((track))
-                track = Track(label, start, start + SEG_LENGTH, best_p)
+                track = Track(label, start, start + segment_length, r[0])
+                tracks.append(track)
+                active_tracks[label] = track
             else:
-                track.confidences.append(best_p)
-        elif track is not None:
-            track.end = start + (SEG_LENGTH / 2 - SEG_STRIDE)
-            tracks.append((track))
-            track = None
+                track.end = start + segment_length
+                track.confidences.append(r[0])
+            # else:
 
-        start += SEG_STRIDE
+        # elif track is not None:
+        #     track.end = start + (segment_length / 2 - segment_stride)
+        #     tracks.append((track))
+        #     track = None
 
-    if track is not None:
-        track.end = length
-        track.confidences.append(best_p)
-        tracks.append((track))
+        start += segment_stride
 
     return [t.get_meta() for t in tracks]
 
