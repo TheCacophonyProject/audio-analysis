@@ -130,7 +130,6 @@ def build_entry(begin, end, species, activation):
 
 
 def identify_species(recording, metadata, models):
-
     # get spectrogram to be checked
     sr, npspec = _load_sample(recording)
 
