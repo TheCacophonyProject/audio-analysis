@@ -35,7 +35,7 @@ def load_samples(path, segment_length, stride, hop_length=640):
     end = 0
     mel_samples = []
     i = 0
-    while end < length:
+    while end < (length - segment_length / 2):
         data = frames[i * jumps_per_stride : i * jumps_per_stride + sample_size]
         if len(data) != sample_size:
             sample = np.zeros((sample_size))
@@ -113,7 +113,7 @@ def classify(file, model_file):
         for existing in existing_tracks:
             track = active_tracks[existing]
             if track.label not in track_labels:
-                track.end = track.end - segment_stride
+                track.end = min(length, track.end - segment_length / 2)
                 del active_tracks[track.label]
 
         for r in results:
@@ -124,7 +124,7 @@ def classify(file, model_file):
                 tracks.append(track)
                 active_tracks[label] = track
             else:
-                track.end = start + segment_length
+                track.end = min(length, start + segment_length)
                 track.confidences.append(r[0])
             # else:
 
@@ -134,7 +134,7 @@ def classify(file, model_file):
         #     track = None
 
         start += segment_stride
-    return [t.get_meta() for t in tracks]
+    return [t.get_meta() for t in tracks], length
 
 
 class Track:
