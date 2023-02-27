@@ -14,6 +14,9 @@ from identify_bird import classify
 import math
 
 
+NON_BIRD = ["human", "noise"]
+
+
 def calc_cacophony_index(tracks, length):
     version = "1.0"
     other_labels = [other for other in tracks if other["species"] != "human"]
@@ -33,7 +36,7 @@ def calc_cacophony_index(tracks, length):
     period_end = period_length
     period = 0
     for track in other_labels:
-        if track["species"] not in ["human", "noise"]:
+        if track["species"] not in NON_BIRD:
             # bird started in existing span
             if bird_until >= track["begin_s"] and bird_until < track["end_s"]:
                 new_span = (bird_until, track["end_s"])
@@ -66,11 +69,18 @@ def calc_cacophony_index(tracks, length):
     return percents, version
 
 
+def filter_trcks(tracks):
+    filtered_labels = ["noise"]
+    filtered = [t for t in tracks if t["species"] not in filtered_labels]
+    return filtered
+
+
 def species_identify(file_name, metadata_name, models, bird_model):
-    # labels = identify_species(file_name, metadata_name, models)
-    labels = []
+    labels = identify_species(file_name, metadata_name, models)
     other_labels, length = classify(file_name, bird_model)
+    other_labels = filter_trcks(other_labels)
     cacophony_index, version = calc_cacophony_index(other_labels, length)
+
     labels.extend(other_labels)
     result = {}
     result["species_identify"] = labels

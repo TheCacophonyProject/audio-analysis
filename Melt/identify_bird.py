@@ -32,11 +32,15 @@ def load_samples(path, segment_length, stride, hop_length=640):
     sample_size = int(sr * segment_length)
     jumps_per_stride = int(sr * stride)
     length = len(frames) / sr
-    end = 0
+    end = segment_length
     mel_samples = []
     i = 0
-    while end < (length - segment_length / 2):
-        data = frames[i * jumps_per_stride : i * jumps_per_stride + sample_size]
+    while end < (length + stride):
+        if end > length:
+            # always use end ofr last sample
+            data = frames[-sample_size:]
+        else:
+            data = frames[i * jumps_per_stride : i * jumps_per_stride + sample_size]
         if len(data) != sample_size:
             sample = np.zeros((sample_size))
             sample[: len(data)] = data
@@ -53,7 +57,6 @@ def load_samples(path, segment_length, stride, hop_length=640):
             n_mels=80,
         )
         mel = librosa.power_to_db(mel, ref=np.max)
-
         # end = start + sample_size
         mel_m = tf.reduce_mean(mel, axis=1)
         mel_m = tf.expand_dims(mel_m, axis=1)
@@ -92,6 +95,10 @@ def classify(file, model_file):
     start = 0
     active_tracks = {}
     for prediction in predictions:
+        # last sample always ends at length of audio rec
+        if start + segment_length > length:
+            start = length - segment_length
+        specific_bird = False
         results = []
         track_labels = []
         if multi_label:
@@ -100,6 +107,12 @@ def classify(file, model_file):
                     label = labels[i]
                     results.append((p, label))
                     track_labels.append(label)
+                    specific_bird = specific_bird or label not in [
+                        "human",
+                        "noise",
+                        "bird",
+                    ]
+
         else:
             best_i = np.argmax(prediction)
             best_p = prediction[best_i]
@@ -107,17 +120,25 @@ def classify(file, model_file):
                 label = labels[best_i]
                 results.append((best_p, label))
                 track_labels.append(label)
+                specific_bird = label not in ["human", "noise", "bird"]
 
         # remove tracks that have ended
         existing_tracks = list(active_tracks.keys())
         for existing in existing_tracks:
             track = active_tracks[existing]
-            if track.label not in track_labels:
-                track.end = min(length, track.end - segment_length / 2)
+            if track.label not in track_labels or (
+                track.label == "bird" and specific_bird
+            ):
+                if specific_bird:
+                    track.end = start
+                else:
+                    track.end = min(length, track.end - segment_length / 2)
                 del active_tracks[track.label]
 
         for r in results:
             label = r[1]
+            if specific_bird and label == "bird":
+                continue
             track = active_tracks.get(label, None)
             if track is None:
                 track = Track(label, start, start + segment_length, r[0])
