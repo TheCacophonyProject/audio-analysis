@@ -10,6 +10,8 @@ RUN apt-get update && \
 RUN curl -q https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
   python3 get-pip.py --quiet --no-cache-dir
 
+RUN apt install -y libgirepository1.0-dev
+
 RUN apt-get purge -y curl && apt-get autoremove -y && apt-get clean
 
 COPY requirements.txt .
