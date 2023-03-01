@@ -5,6 +5,7 @@ import numpy as np
 import logging
 import sys
 import json
+import audioread.ffdec  # Use ffmpeg decoder
 
 
 fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
@@ -15,7 +16,10 @@ logging.basicConfig(
 
 
 def load_recording(file, resample=48000):
-    frames, sr = librosa.load(str(file), sr=None)
+    # librosa giving strange results
+    aro = audioread.ffdec.FFmpegAudioFile(file)
+    frames, sr = librosa.load(aro)
+    aro.close()
     if resample is not None and resample != sr:
         frames = librosa.resample(frames, orig_sr=sr, target_sr=resample)
         sr = resample

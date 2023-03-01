@@ -10,12 +10,6 @@ RUN apt-get update && \
 RUN curl -q https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
   python3 get-pip.py --quiet --no-cache-dir
 
-ENV TZ=Pacific/Auckland
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-RUN apt install -y build-essential libdbus-glib-1-dev libgirepository1.0-dev python3-setuptools libcairo2-dev libjpeg-dev libgif-dev libcairo2 python3-dev
-
-
 RUN apt-get purge -y curl && apt-get autoremove -y && apt-get clean
 
 COPY requirements.txt .

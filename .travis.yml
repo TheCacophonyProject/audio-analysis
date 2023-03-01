@@ -7,10 +7,6 @@ python: 3.9
 services:
   - docker
 
-install:
-- sudo apt update
-- sudo apt install -y libgirepository1.0-dev
-
 before_script:
 - pip install black
 
