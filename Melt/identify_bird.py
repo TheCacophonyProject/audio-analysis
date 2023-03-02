@@ -6,7 +6,7 @@ import logging
 import sys
 import json
 import audioread.ffdec  # Use ffmpeg decoder
-
+import math
 
 fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 
@@ -16,7 +16,7 @@ logging.basicConfig(
 
 
 def load_recording(file, resample=48000):
-    # librosa giving strange results
+    # librosa.load(file) giving strange results
     aro = audioread.ffdec.FFmpegAudioFile(file)
     frames, sr = librosa.load(aro)
     aro.close()
@@ -60,6 +60,11 @@ def load_samples(path, segment_length, stride, hop_length=640):
             fmax=11000,
             n_mels=80,
         )
+        if np.amax(mel) == np.amin(mel):
+            # noting usefull here stop early
+            strides_per = math.ceil(segment_length / stride)
+            mel_samples = mel_samples[:-strides_per]
+            break
         mel = librosa.power_to_db(mel, ref=np.max)
         # end = start + sample_size
         mel_m = tf.reduce_mean(mel, axis=1)
