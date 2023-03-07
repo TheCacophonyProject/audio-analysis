@@ -67,9 +67,11 @@ def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
             fmax=11000,
             n_mels=80,
         )
-        if np.amax(mel) == np.amin(mel):
+        half = mel[:, 75:]
+
+        if np.amax(half) == np.amin(half):
             # noting usefull here stop early
-            strides_per = math.ceil(segment_length / stride)
+            strides_per = math.ceil(segment_length / 2.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
         mel = librosa.power_to_db(mel, ref=np.max)
