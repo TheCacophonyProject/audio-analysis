@@ -26,7 +26,14 @@ def load_recording(file, resample=48000):
     return frames, sr
 
 
-def load_samples(path, segment_length, stride, hop_length=640):
+def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
+    logging.debug(
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s",
+        segment_length,
+        stride,
+        hop_length,
+        mean_sub,
+    )
     frames, sr = load_recording(path)
     mels = []
     i = 0
@@ -67,9 +74,10 @@ def load_samples(path, segment_length, stride, hop_length=640):
             break
         mel = librosa.power_to_db(mel, ref=np.max)
         # end = start + sample_size
-        mel_m = tf.reduce_mean(mel, axis=1)
-        mel_m = tf.expand_dims(mel_m, axis=1)
-        mel = mel - mel_m
+        if mean_sub:
+            mel_m = tf.reduce_mean(mel, axis=1)
+            mel_m = tf.expand_dims(mel_m, axis=1)
+            mel = mel - mel_m
 
         mel_samples.append(mel)
         i += 1
@@ -97,8 +105,11 @@ def classify(file, model_file):
     segment_length = meta.get("segment_length", 3)
     segment_stride = meta.get("segment_stride", 1.5)
     hop_length = meta.get("hop_length", 640)
+    mean_sub = meta.get("mean_sub", False)
 
-    samples, length = load_samples(file, segment_length, segment_stride, hop_length)
+    samples, length = load_samples(
+        file, segment_length, segment_stride, hop_length, mean_sub=mean_sub
+    )
     predictions = model.predict(samples, verbose=0)
     tracks = []
     start = 0
