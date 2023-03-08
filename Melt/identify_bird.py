@@ -68,13 +68,12 @@ def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
             n_mels=80,
         )
         half = mel[:, 75:]
-
         if np.amax(half) == np.amin(half):
             # noting usefull here stop early
             strides_per = math.ceil(segment_length / 2.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
-        mel = librosa.power_to_db(mel, ref=np.max)
+        mel = librosa.power_to_db(mel)
         # end = start + sample_size
         if mean_sub:
             mel_m = tf.reduce_mean(mel, axis=1)
@@ -108,7 +107,6 @@ def classify(file, model_file):
     segment_stride = meta.get("segment_stride", 1.5)
     hop_length = meta.get("hop_length", 640)
     mean_sub = meta.get("mean_sub", False)
-
     samples, length = load_samples(
         file, segment_length, segment_stride, hop_length, mean_sub=mean_sub
     )
