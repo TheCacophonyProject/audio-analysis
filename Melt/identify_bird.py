@@ -107,6 +107,8 @@ def classify(file, model_file):
     segment_stride = meta.get("segment_stride", 1.5)
     hop_length = meta.get("hop_length", 640)
     mean_sub = meta.get("mean_sub", False)
+    model_name = meta.get("name", False)
+
     samples, length = load_samples(
         file, segment_length, segment_stride, hop_length, mean_sub=mean_sub
     )
@@ -161,7 +163,7 @@ def classify(file, model_file):
                 continue
             track = active_tracks.get(label, None)
             if track is None:
-                track = Track(label, start, start + segment_length, r[0])
+                track = Track(label, start, start + segment_length, r[0], model_name)
                 tracks.append(track)
                 active_tracks[label] = track
             else:
@@ -179,14 +181,16 @@ def classify(file, model_file):
 
 
 class Track:
-    def __init__(self, label, start, end, confidence):
+    def __init__(self, label, start, end, confidence, model_name):
         self.start = start
         self.label = label
         self.end = end
         self.confidences = [confidence]
+        self.model = model_name
 
     def get_meta(self):
         meta = {}
+        meta["model"] = self.model
         meta["begin_s"] = self.start
         meta["end_s"] = self.end
         meta["species"] = self.label

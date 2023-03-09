@@ -126,6 +126,7 @@ def build_entry(begin, end, species, activation):
     entry["end_s"] = end
     entry["species"] = species
     entry["likelihood"] = round(activation * 0.01, 2)
+    entry["model"] = "morepork"
     return entry
 
 
