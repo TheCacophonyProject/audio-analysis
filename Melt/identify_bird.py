@@ -13,6 +13,7 @@ fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 logging.basicConfig(
     stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
 )
+PROB_THRESH = 0.8
 
 
 def load_recording(file, resample=48000):
@@ -125,7 +126,7 @@ def classify(file, model_file):
         track_labels = []
         if multi_label:
             for i, p in enumerate(prediction):
-                if p >= 0.7:
+                if p >= PROB_THRESH:
                     label = labels[i]
                     results.append((p, label))
                     track_labels.append(label)
@@ -138,7 +139,7 @@ def classify(file, model_file):
         else:
             best_i = np.argmax(prediction)
             best_p = prediction[best_i]
-            if best_p >= 0.7:
+            if best_p >= PROB_THRESH:
                 label = labels[best_i]
                 results.append((best_p, label))
                 track_labels.append(label)
