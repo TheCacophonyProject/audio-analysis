@@ -7,6 +7,7 @@ import sys
 import json
 import audioread.ffdec  # Use ffmpeg decoder
 import math
+from custommel import mel_spec
 
 fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 
@@ -37,13 +38,21 @@ def load_samples(
     mel_break=1750,
     htk=False,
     n_mels=80,
+    fmin=50,
+    fmax=11000,
 ):
     logging.debug(
-        "Loading samples with length %s stride %s hop length %s and mean_sub %s",
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s",
         segment_length,
         stride,
         hop_length,
         mean_sub,
+        use_mfcc,
+        mel_break,
+        htk,
+        n_mels,
+        fmin,
+        fmax,
     )
     frames, sr = load_recording(path)
     mels = []
@@ -141,6 +150,8 @@ def classify(file, model_file):
     n_mels = meta.get("n_mels", 80)
     mel_break = meta.get("mel_break", 1750)
     htk = meta.get("htk", False)
+    fmin = meta.get("fmin", 50)
+    fmax = meta.get("fmax", 11000)
 
     samples, length = load_samples(
         file,
@@ -152,6 +163,8 @@ def classify(file, model_file):
         htk=htk,
         mel_break=mel_break,
         n_mels=n_mels,
+        fmin=fmin,
+        fmax=fmax,
     )
     predictions = model.predict(samples, verbose=0)
     tracks = []
