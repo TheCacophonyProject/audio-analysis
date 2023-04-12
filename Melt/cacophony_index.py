@@ -114,8 +114,8 @@ def calculate(source_file_name):
         table.append(entry)
 
     result = {}
-    result["cacophony_index"] = table
-    result["cacophony_index_version"] = "2020-01-20_A"
+    result["cacophony_index_old"] = table
+    result["cacophony_index_old_version"] = "2020-01-20_A"
     if table == []:
         p = source_data.shape[0] / sample_rate
         result["ci_warning"] = (
