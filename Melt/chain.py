@@ -77,8 +77,8 @@ def calc_cacophony_index(tracks, length):
     return percents, version
 
 
-def filter_trcks(tracks):
-    filtered_labels = ["noise"]
+def filter_tracks(tracks):
+    filtered_labels = ["noise", "morepork"]
     filtered = [t for t in tracks if t["species"] not in filtered_labels]
     return filtered
 
@@ -86,7 +86,7 @@ def filter_trcks(tracks):
 def species_identify(file_name, metadata_name, models, bird_model):
     labels = identify_species(file_name, metadata_name, models)
     other_labels, length = classify(file_name, bird_model)
-    other_labels = filter_trcks(other_labels)
+    other_labels = filter_tracks(other_labels)
     cacophony_index, version = calc_cacophony_index(other_labels, length)
 
     labels.extend(other_labels)
