@@ -27,7 +27,17 @@ def load_recording(file, resample=48000):
     return frames, sr
 
 
-def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
+def load_samples(
+    path,
+    segment_length,
+    stride,
+    hop_length=640,
+    mean_sub=False,
+    use_mfcc=False,
+    mel_break=1750,
+    htk=False,
+    n_mels=80,
+):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s",
         segment_length,
@@ -59,15 +69,21 @@ def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
             data = sample
         end += stride
         # /start = int(jumps_per_stride * (i * stride))
-        mel = librosa.feature.melspectrogram(
-            y=data,
-            sr=sr,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            fmin=50,
-            fmax=11000,
-            n_mels=80,
-        )
+        if not htk:
+            mel = librosa.feature.melspectrogram(
+                y=data,
+                sr=sr,
+                n_fft=n_fft,
+                hop_length=hop_length,
+                fmin=50,
+                fmax=11000,
+                n_mels=n_mels,
+            )
+        else:
+            spectogram = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
+            mel = mel_spec(
+                spectogram, sr, n_fft, hop_length, n_mels, fmin, fmax, mel_break
+            )
         half = mel[:, 75:]
         if np.amax(half) == np.amin(half):
             # noting usefull here stop early
@@ -75,6 +91,18 @@ def load_samples(path, segment_length, stride, hop_length=640, mean_sub=False):
             mel_samples = mel_samples[:-strides_per]
             break
         mel = librosa.power_to_db(mel)
+        if use_mfcc:
+            mfcc = librosa.feature.mfcc(
+                y=data,
+                sr=sr,
+                hop_length=hop_length,
+                htk=True,
+                fmin=50,
+                fmax=11000,
+                n_mels=80,
+            )
+            mfcc = tf.image.resize_with_pad(mfcc, *mel.shape)
+            mel = tf.concat((mel, mfcc), axis=0)
         # end = start + sample_size
         if mean_sub:
             mel_m = tf.reduce_mean(mel, axis=1)
@@ -109,9 +137,21 @@ def classify(file, model_file):
     hop_length = meta.get("hop_length", 640)
     mean_sub = meta.get("mean_sub", False)
     model_name = meta.get("name", False)
+    use_mfcc = meta.get("use_mfcc", False)
+    n_mels = meta.get("n_mels", 80)
+    mel_break = meta.get("mel_break", 1750)
+    htk = meta.get("htk", False)
 
     samples, length = load_samples(
-        file, segment_length, segment_stride, hop_length, mean_sub=mean_sub
+        file,
+        segment_length,
+        segment_stride,
+        hop_length,
+        mean_sub=mean_sub,
+        use_mfcc=use_mfcc,
+        htk=htk,
+        mel_break=mel_break,
+        n_mels=n_mels,
     )
     predictions = model.predict(samples, verbose=0)
     tracks = []
