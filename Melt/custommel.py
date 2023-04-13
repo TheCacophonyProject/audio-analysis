@@ -1,6 +1,7 @@
 import librosa
 import numpy as np
 
+
 # replicating code from librosa but changing break freq from 700 -> 1750
 def hz_to_mel(frequencies, break_freq):
     frequencies = np.array(frequencies)
@@ -16,7 +17,6 @@ def mel_frequencies(n_mels, fmin, fmax, break_freq):
 
 
 def mel_f(sr, n_mels, fmin, fmax, n_fft, break_freq):
-
     # Initialize the weights
     n_mels = int(n_mels)
     weights = np.zeros((n_mels, int(1 + n_fft // 2)), dtype=np.float32)
