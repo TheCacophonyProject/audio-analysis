@@ -5,3 +5,4 @@ scipy~=1.9.3
 tensorflow~=2.10.1
 Wave~=0.0.2
 numba
+argparse==1.4.0

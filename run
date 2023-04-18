@@ -8,4 +8,4 @@ fi
 
 dir=$(readlink -f "$(dirname "$source")")
 filename=$(basename "$source")
-docker run -it -v "$dir":/io audio-analysis /io/"$filename" /io/"$2" /io/"$3" /io/"$4"
+docker run -it -v "$dir":/io 9f6f98e8a556 --morepork-model /io/"$2" --bird-model /io/"$3" /io/"$filename"

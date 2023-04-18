@@ -13,6 +13,7 @@ from identify_species import identify_species
 from identify_bird import classify
 import math
 
+import argparse
 
 NON_BIRD = ["human", "noise"]
 
@@ -24,11 +25,12 @@ def calc_cacophony_index(tracks, length):
     bird_until = -1
     period_length = 20
     bins = math.ceil(length / period_length)
-
     # some recordings are 61 seconds just make last bin size slightly bigger
-    last_bin_size = period_length - period_length * (bins - 1)
+    last_bin_size = length - period_length * (bins - 1)
+    last_bin = None
     if last_bin_size < 2:
         bins -= 1
+        last_bin = length
     percents = []
     for i in range(bins):
         percents.append(
@@ -38,6 +40,8 @@ def calc_cacophony_index(tracks, length):
                 "index_percent": 0,
             }
         )
+    if last_bin is not None:
+        percents[-1]["end_s"] = last_bin
     period_end = period_length
     period = 0
     for track in other_labels:
@@ -83,43 +87,62 @@ def filter_tracks(tracks):
     return filtered
 
 
-def species_identify(file_name, metadata_name, models, bird_model):
-    labels = identify_species(file_name, metadata_name, models)
-    other_labels, length = classify(file_name, bird_model)
-    other_labels = filter_tracks(other_labels)
-    cacophony_index, version = calc_cacophony_index(other_labels, length)
-
-    labels.extend(other_labels)
+def species_identify(file_name, morepork_model, bird_model):
+    labels = []
     result = {}
+    if morepork_model is not None:
+        morepork_ids = identify_species(file_name, morepork_model)
+        labels.extend(morepork_ids)
+    if bird_model is not None:
+        bird_ids, length = classify(file_name, bird_model)
+        bird_ids = filter_tracks(bird_ids)
+        labels.extend(bird_ids)
+        cacophony_index, version = calc_cacophony_index(bird_ids, length)
+        result["cacophony_index"] = cacophony_index
+        result["cacophony_index_version"] = version
+
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
-    result["cacophony_index"] = cacophony_index
-    result["cacophony_index_version"] = version
     return result
 
 
-def examine(file_name, metadata_name, models, other_model, summary):
+def examine(file_name, morepork_model, bird_model):
     import cacophony_index
 
-    ci = cacophony_index.calculate(file_name)
-    summary.update(ci)
-    summary.update(species_identify(file_name, metadata_name, models, other_model))
+    summary = cacophony_index.calculate(file_name)
+    summary.update(species_identify(file_name, morepork_model, bird_model))
+    return summary
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--old-cacophony-index",
+        action="count",
+        help="Calculate old cacophony index on this file",
+    )
+    parser.add_argument("--morepork-model", help="Path to morepork model")
+    parser.add_argument("--bird-model", help="Path to bird model")
+
+    parser.add_argument("file", help="Audio file to run on")
+
+    args = parser.parse_args()
+    return args
 
 
 def main():
-    argv = sys.argv
+    args = parse_args()
 
     t0 = time.time()
-    summary = {}
+    summary = None
     result = 0
 
-    if argv[1] == "-cacophony_index":
+    if args.old_cacophony_index:
         import cacophony_index
 
-        ci = cacophony_index.calculate(argv[2])
-        summary.update(ci)
+        summary = cacophony_index.calculate(args.file)
     else:
-        examine(argv[1], argv[2], argv[3], argv[4], summary)
+        summary = examine(args.file, args.morepork_model, args.bird_model)
 
     t1 = time.time()
 

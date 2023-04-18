@@ -19,4 +19,4 @@ WORKDIR /
 RUN rm -rf /tmp/workdir
 
 COPY Melt /Melt
-ENTRYPOINT ["/Melt/run"]
+ENTRYPOINT ["python3","/Melt/chain.py"]
