@@ -99,7 +99,7 @@ def load_samples(
             strides_per = math.ceil(segment_length / 2.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
-        mel = librosa.power_to_db(mel)
+        mel = librosa.power_to_db(mel, ref=np.max)
         if use_mfcc:
             mfcc = librosa.feature.mfcc(
                 y=data,
