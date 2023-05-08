@@ -40,6 +40,7 @@ def load_samples(
     n_mels=80,
     fmin=50,
     fmax=11000,
+    channels=1,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s",
@@ -99,7 +100,10 @@ def load_samples(
             strides_per = math.ceil(segment_length / 2.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
+
         mel = librosa.power_to_db(mel, ref=np.max)
+        mel = tf.expand_dims(mel, axis=2)
+
         if use_mfcc:
             mfcc = librosa.feature.mfcc(
                 y=data,
@@ -117,15 +121,16 @@ def load_samples(
             mel_m = tf.reduce_mean(mel, axis=1)
             mel_m = tf.expand_dims(mel_m, axis=1)
             mel = mel - mel_m
-
+        if channels > 1:
+            mel = tf.repeat(mel, channels, axis=2)
         mel_samples.append(mel)
         i += 1
     return np.array(mel_samples), len(frames) / sr
 
 
 def load_model(model_path):
-    logging.debug("Loading %s", model_path)
     model_path = Path(model_path)
+    logging.debug("Loading %s", str(model_path))
     model = tf.keras.models.load_model(
         str(model_path),
         compile=False,
@@ -152,6 +157,7 @@ def classify(file, model_file):
     htk = meta.get("htk", False)
     fmin = meta.get("fmin", 50)
     fmax = meta.get("fmax", 11000)
+    channels = meta.get("channels", 1)
 
     samples, length = load_samples(
         file,
@@ -165,7 +171,10 @@ def classify(file, model_file):
         n_mels=n_mels,
         fmin=fmin,
         fmax=fmax,
+        channels=channels,
     )
+    if len(samples) == 0:
+        return [], length
     predictions = model.predict(samples, verbose=0)
     tracks = []
     start = 0
