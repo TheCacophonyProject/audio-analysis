@@ -158,7 +158,8 @@ def classify(file, model_file):
     fmin = meta.get("fmin", 50)
     fmax = meta.get("fmax", 11000)
     channels = meta.get("channels", 1)
-
+    threshold = meta.get("threshold", 0.7)
+    PROB_THRESH = threshold
     samples, length = load_samples(
         file,
         segment_length,
