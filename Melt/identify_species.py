@@ -148,6 +148,17 @@ def identify_species(recording, models):
         sample = librosa.amplitude_to_db(sample, ref=np.max)
         if sample.min() != 0:
             sample = sample / abs(sample.min()) + 1.0
+        if sample.shape[1] < 60:
+            sample = np.pad(
+                sample,
+                (
+                    (
+                        0,
+                        0,
+                    ),
+                    (0, 60 - sample.shape[1]),
+                ),
+            )
         samples.append(sample.reshape(sample.shape + (1,)))
     samples = np.array(samples)
 

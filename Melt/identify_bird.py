@@ -67,7 +67,7 @@ def load_samples(
     end = segment_length
     mel_samples = []
     i = 0
-    while end < (length + stride):
+    while i == 0 or end < (length + stride):
         if end > length:
             # always use end ofr last sample
             data = frames[-sample_size:]

@@ -28,7 +28,7 @@ def calc_cacophony_index(tracks, length):
     # some recordings are 61 seconds just make last bin size slightly bigger
     last_bin_size = length - period_length * (bins - 1)
     last_bin = None
-    if last_bin_size < 2:
+    if bins > 1 and last_bin_size < 2:
         bins -= 1
         last_bin = length
     percents = []
