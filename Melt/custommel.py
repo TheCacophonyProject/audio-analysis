@@ -56,8 +56,8 @@ def mel_f(sr, n_mels, fmin, fmax, n_fft, break_freq):
     return weights
 
 
-def mel_spec(stft, sr, n_fft, hop_length, n_mels, fmin, fmax, break_freq=1750):
+def mel_spec(stft, sr, n_fft, hop_length, n_mels, fmin, fmax, break_freq=1750, power=2):
     # fft_windows = librosa.stft(data, n_fft=n_fft, hop_length=hop_length)
-    magnitude = np.abs(stft) ** 2
+    magnitude = np.abs(stft) ** power
     mels = mel_f(sr, n_mels, fmin, fmax, n_fft, break_freq)
     return mels.dot(magnitude)

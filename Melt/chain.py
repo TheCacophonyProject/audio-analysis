@@ -94,10 +94,11 @@ def species_identify(file_name, morepork_model, bird_model):
         morepork_ids = identify_species(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_model is not None:
-        bird_ids, length = classify(file_name, bird_model)
+        bird_ids, length, chirps = classify(file_name, bird_model)
         bird_ids = filter_tracks(bird_ids)
         labels.extend(bird_ids)
         cacophony_index, version = calc_cacophony_index(bird_ids, length)
+        result["chirps"] = chirps
         result["cacophony_index"] = cacophony_index
         result["cacophony_index_version"] = version
 

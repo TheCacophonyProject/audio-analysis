@@ -14,7 +14,6 @@ fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 logging.basicConfig(
     stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
 )
-PROB_THRESH = 0.8
 
 
 def load_recording(file, resample=48000):
@@ -41,6 +40,8 @@ def load_samples(
     fmin=50,
     fmax=11000,
     channels=1,
+    power=2,
+    db_scale=True,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s",
@@ -92,7 +93,15 @@ def load_samples(
         else:
             spectogram = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
             mel = mel_spec(
-                spectogram, sr, n_fft, hop_length, n_mels, fmin, fmax, mel_break
+                spectogram,
+                sr,
+                n_fft,
+                hop_length,
+                n_mels,
+                fmin,
+                fmax,
+                mel_break,
+                power=power,
             )
         half = mel[:, 75:]
         if np.amax(half) == np.amin(half):
@@ -100,8 +109,8 @@ def load_samples(
             strides_per = math.ceil(segment_length / 2.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
-
-        mel = librosa.power_to_db(mel, ref=np.max)
+        if db_scale:
+            mel = librosa.power_to_db(mel, ref=np.max)
         mel = tf.expand_dims(mel, axis=2)
 
         if use_mfcc:
@@ -125,7 +134,7 @@ def load_samples(
             mel = tf.repeat(mel, channels, axis=2)
         mel_samples.append(mel)
         i += 1
-    return np.array(mel_samples), len(frames) / sr
+    return frames, sr, np.array(mel_samples), len(frames) / sr
 
 
 def load_model(model_path):
@@ -157,10 +166,12 @@ def classify(file, model_file):
     htk = meta.get("htk", False)
     fmin = meta.get("fmin", 50)
     fmax = meta.get("fmax", 11000)
+    power = meta.get("power", 2)
+    db_scale = meta.get("db_scale", True)
+
     channels = meta.get("channels", 1)
-    threshold = meta.get("threshold", 0.7)
-    PROB_THRESH = threshold
-    samples, length = load_samples(
+    prob_thresh = meta.get("threshold", 0.7)
+    frames, sr, samples, length = load_samples(
         file,
         segment_length,
         segment_stride,
@@ -173,6 +184,8 @@ def classify(file, model_file):
         fmin=fmin,
         fmax=fmax,
         channels=channels,
+        power=power,
+        db_scale=db_scale,
     )
     if len(samples) == 0:
         return [], length
@@ -181,6 +194,7 @@ def classify(file, model_file):
     start = 0
     active_tracks = {}
     for prediction in predictions:
+        print("have", np.round(prediction * 100))
         # last sample always ends at length of audio rec
         if start + segment_length > length:
             start = length - segment_length
@@ -189,7 +203,7 @@ def classify(file, model_file):
         track_labels = []
         if multi_label:
             for i, p in enumerate(prediction):
-                if p >= PROB_THRESH:
+                if p >= prob_thresh:
                     label = labels[i]
                     results.append((p, label))
                     track_labels.append(label)
@@ -202,7 +216,7 @@ def classify(file, model_file):
         else:
             best_i = np.argmax(prediction)
             best_p = prediction[best_i]
-            if best_p >= PROB_THRESH:
+            if best_p >= prob_thresh:
                 label = labels[best_i]
                 results.append((best_p, label))
                 track_labels.append(label)
@@ -241,7 +255,20 @@ def classify(file, model_file):
         #     track = None
 
         start += segment_stride
-    return [t.get_meta() for t in tracks], length
+
+    signals, noise = signal_noise(frames, sr, hop_length)
+    signals = join_signals(signals, max_gap=0.2)
+    chirps = 0
+    for s in signals:
+        for t in tracks:
+            # overlap
+            if ((t.end - t.start) + (s[1] - s[0])) > max(t.end, s[1]) - min(
+                t.start, s[0]
+            ):
+                # print("Have track", t, " for ", s, t.start, t.end, t.label)
+                if t.label in ["bird", "kiwi", "whistler", "morepork"]:
+                    chirps += 1
+    return [t.get_meta() for t in tracks], length, chirps
 
 
 class Track:
@@ -261,3 +288,107 @@ class Track:
         likelihood = float(round((100 * np.mean(np.array(self.confidences))), 2))
         meta["likelihood"] = likelihood
         return meta
+
+
+import cv2
+
+
+def signal_noise(frames, sr, hop_length=281):
+
+    # frames = frames[:sr]
+    n_fft = sr // 10
+    # frames = frames[: sr * 3]
+    spectogram = np.abs(librosa.stft(frames, n_fft=n_fft, hop_length=hop_length))
+
+    a_max = np.amax(spectogram)
+    spectogram = spectogram / a_max
+    row_medians = np.median(spectogram, axis=1)
+    column_medians = np.median(spectogram, axis=0)
+    rows, columns = spectogram.shape
+
+    column_medians = column_medians[np.newaxis, :]
+    row_medians = row_medians[:, np.newaxis]
+    row_medians = np.repeat(row_medians, columns, axis=1)
+    column_medians = np.repeat(column_medians, rows, axis=0)
+
+    signal = (spectogram > 3 * column_medians) & (spectogram > 3 * row_medians)
+    noise = (spectogram > 2.5 * column_medians) & (spectogram > 2.5 * row_medians)
+    noise[signal == noise] = 0
+    noise = noise.astype(np.uint8)
+    signal = signal.astype(np.uint8)
+    kernel = np.ones((4, 4), np.uint8)
+    signal = cv2.morphologyEx(signal, cv2.MORPH_OPEN, kernel)
+    noise = cv2.morphologyEx(noise, cv2.MORPH_OPEN, kernel)
+    # plot_spec(spectogram)
+
+    signal_indicator_vector = np.amax(signal, axis=0)
+    noise_indicator_vector = np.amax(noise, axis=0)
+
+    signal_indicator_vector = signal_indicator_vector[np.newaxis, :]
+    signal_indicator_vector = cv2.dilate(
+        signal_indicator_vector, np.ones((4, 1), np.uint8)
+    )
+    signal_indicator_vector = np.where(signal_indicator_vector > 0, 1, 0)
+    signal_indicator_vector = signal_indicator_vector * 255
+
+    noise_indicator_vector = noise_indicator_vector[np.newaxis, :]
+    noise_indicator_vector = cv2.dilate(
+        noise_indicator_vector, np.ones((4, 1), np.uint8)
+    )
+    noise_indicator_vector = np.where(noise_indicator_vector > 0, 1, 0)
+
+    noise_indicator_vector = noise_indicator_vector * 128
+
+    indicator_vector = np.concatenate(
+        (signal_indicator_vector, noise_indicator_vector), axis=0
+    )
+    i = 0
+    indicator_vector = np.uint8(indicator_vector)
+    s_start = -1
+    noise_start = -1
+    signals = []
+    noise = []
+    for c in indicator_vector.T:
+        # print("indicator", c)
+        if c[0] == 255:
+            if s_start == -1:
+                s_start = i
+        elif s_start != -1:
+            signals.append((s_start * 281 / sr, (i - 1) * 281 / sr))
+            s_start = -1
+        if c[1] == 128:
+            if noise_start == -1:
+                noise_start = i
+        elif noise_start != -1:
+            noise.append((noise_start * 281 / sr, (i - 1) * 281 / sr))
+            noise_start = -1
+
+        i += 1
+    if s_start != -1:
+        signals.append((s_start * 281 / sr, (i - 1) * 281 / sr))
+    if noise_start != -1:
+        noise.append((noise_start * 281 / sr, (i - 1) * 281 / sr))
+    return signals, noise
+
+
+# join signals that are close toghetr
+def join_signals(signals, max_gap=0.1):
+    new_signals = []
+    prev_s = None
+    for s in signals:
+        if prev_s is None:
+            prev_s = s
+        else:
+            if s[0] < prev_s[1] + max_gap:
+                # combine them
+                prev_s = (prev_s[0], s[1])
+            else:
+                new_signals.append(prev_s)
+                prev_s = s
+    if prev_s is not None:
+        new_signals.append(prev_s)
+    #
+    # print("spaced have", len(new_signals))
+    # for s in new_signals:
+    #     print(s)
+    return new_signals
