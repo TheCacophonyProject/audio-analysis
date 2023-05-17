@@ -8,6 +8,7 @@ import json
 import audioread.ffdec  # Use ffmpeg decoder
 import math
 from custommel import mel_spec
+import cv2
 
 fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 
@@ -288,9 +289,6 @@ class Track:
         likelihood = float(round((100 * np.mean(np.array(self.confidences))), 2))
         meta["likelihood"] = likelihood
         return meta
-
-
-import cv2
 
 
 def signal_noise(frames, sr, hop_length=281):
