@@ -294,7 +294,6 @@ import cv2
 
 
 def signal_noise(frames, sr, hop_length=281):
-
     # frames = frames[:sr]
     n_fft = sr // 10
     # frames = frames[: sr * 3]
