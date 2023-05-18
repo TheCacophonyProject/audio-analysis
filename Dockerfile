@@ -7,6 +7,9 @@ RUN apt-get update && \
     -o APT::Install-Recommends=false -o APT::Install-Suggests=false \
     python3 python3-distutils curl ca-certificates libsndfile1
 
+#for opencv
+RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
+
 RUN curl -q https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
   python3 get-pip.py --quiet --no-cache-dir
 
