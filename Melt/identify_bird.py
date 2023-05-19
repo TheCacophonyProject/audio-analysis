@@ -195,7 +195,6 @@ def classify(file, model_file):
     start = 0
     active_tracks = {}
     for prediction in predictions:
-        print("have", np.round(prediction * 100))
         # last sample always ends at length of audio rec
         if start + segment_length > length:
             start = length - segment_length
