@@ -82,7 +82,7 @@ def calc_cacophony_index(tracks, length):
 
 
 def filter_tracks(tracks):
-    filtered_labels = ["noise", "morepork"]
+    filtered_labels = ["noise"]
     filtered = [t for t in tracks if t["species"] not in filtered_labels]
     return filtered
 
