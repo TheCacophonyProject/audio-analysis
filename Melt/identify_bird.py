@@ -276,7 +276,9 @@ def classify(file, model_file):
     last_end = 0
     track_index = 0
     for s in signals:
-        while True:
+        if track_index > len(sorted_tracks):
+            break
+        while track_index < len(sorted_tracks):
             t = sorted_tracks[track_index]
             start = t.start
             end = t.end
