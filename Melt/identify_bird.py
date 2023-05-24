@@ -15,6 +15,12 @@ fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
 logging.basicConfig(
     stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
 )
+CALL_LENGTH = 1
+
+DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
+
+DEFAULT_BIRDS = ["bird"]
+DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
 
 
 def load_recording(file, resample=48000):
@@ -169,7 +175,9 @@ def classify(file, model_file):
     fmax = meta.get("fmax", 11000)
     power = meta.get("power", 2)
     db_scale = meta.get("db_scale", True)
-
+    bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
+    bird_species = meta.get("bird_species", DEFAULT_SPECIES)
+    print("bird labels", bird_labels, " bird species", bird_species)
     channels = meta.get("channels", 1)
     prob_thresh = meta.get("threshold", 0.7)
     frames, sr, samples, length = load_samples(
@@ -194,7 +202,7 @@ def classify(file, model_file):
     tracks = []
     start = 0
     active_tracks = {}
-    for prediction in predictions:
+    for i, prediction in enumerate(predictions):
         # last sample always ends at length of audio rec
         if start + segment_length > length:
             start = length - segment_length
@@ -207,11 +215,7 @@ def classify(file, model_file):
                     label = labels[i]
                     results.append((p, label))
                     track_labels.append(label)
-                    specific_bird = specific_bird or label not in [
-                        "human",
-                        "noise",
-                        "bird",
-                    ]
+                    specific_bird = specific_bird or label in bird_species
 
         else:
             best_i = np.argmax(prediction)
@@ -220,7 +224,7 @@ def classify(file, model_file):
                 label = labels[best_i]
                 results.append((best_p, label))
                 track_labels.append(label)
-                specific_bird = label not in ["human", "noise", "bird"]
+                specific_bird = label in bird_species
 
         # remove tracks that have ended
         existing_tracks = list(active_tracks.keys())
@@ -229,10 +233,7 @@ def classify(file, model_file):
             if track.label not in track_labels or (
                 track.label == "bird" and specific_bird
             ):
-                if specific_bird:
-                    track.end = start
-                else:
-                    track.end = min(length, track.end - segment_length / 2)
+                track.end = start + CALL_LENGTH
                 del active_tracks[track.label]
 
         for r in results:
@@ -241,11 +242,19 @@ def classify(file, model_file):
                 continue
             track = active_tracks.get(label, None)
             if track is None:
-                track = Track(label, start, start + segment_length, r[0], model_name)
+                t_s = start
+                t_e = start + segment_length
+                if start > 0:
+                    t_s = start - segment_stride + segment_length - CALL_LENGTH
+
+                if (i + 1) < len(predictions):
+                    t_e = start + segment_stride + CALL_LENGTH
+                t_e = max(t_s, t_e)
+                track = Track(label, t_s, t_e, r[0], model_name)
                 tracks.append(track)
                 active_tracks[label] = track
             else:
-                track.end = min(length, start + segment_length)
+                track.end = start + segment_stride + CALL_LENGTH
                 track.confidences.append(r[0])
             # else:
 
@@ -255,19 +264,37 @@ def classify(file, model_file):
         #     track = None
 
         start += segment_stride
-
+    tracks = [t for t in tracks if t.end > t.start]
     signals, noise = signal_noise(frames, sr, hop_length)
     signals = join_signals(signals, max_gap=0.2)
+    sorted_tracks = [t for t in tracks if t.label in bird_labels]
+    sorted_tracks = sorted(
+        sorted_tracks,
+        key=lambda track: track.start,
+    )
     chirps = 0
+    last_end = 0
+    track_index = 0
     for s in signals:
-        for t in tracks:
+        while True:
+            t = sorted_tracks[track_index]
+            start = t.start
+            end = t.end
+            if start < last_end:
+                start = last_end
+                end = max(start, end)
             # overlap
-            if ((t.end - t.start) + (s[1] - s[0])) > max(t.end, s[1]) - min(
-                t.start, s[0]
-            ):
+            if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
                 # print("Have track", t, " for ", s, t.start, t.end, t.label)
-                if t.label in ["bird", "kiwi", "whistler", "morepork"]:
+                if t.label in bird_labels:
                     chirps += 1
+                if end > s[1]:
+                    # check next signal
+                    break
+            elif start > s[1]:
+                break
+            last_end = end
+            track_index += 1
     return [t.get_meta() for t in tracks], length, chirps
 
 
