@@ -177,7 +177,6 @@ def classify(file, model_file):
     db_scale = meta.get("db_scale", True)
     bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
     bird_species = meta.get("bird_species", DEFAULT_SPECIES)
-    print("bird labels", bird_labels, " bird species", bird_species)
     channels = meta.get("channels", 1)
     prob_thresh = meta.get("threshold", 0.7)
     frames, sr, samples, length = load_samples(
