@@ -232,7 +232,8 @@ def classify(file, model_file):
             if track.label not in track_labels or (
                 track.label == "bird" and specific_bird
             ):
-                track.end = start + CALL_LENGTH
+                track.end = min(length, track.end - segment_stride)
+
                 del active_tracks[track.label]
 
         for r in results:
@@ -241,19 +242,11 @@ def classify(file, model_file):
                 continue
             track = active_tracks.get(label, None)
             if track is None:
-                t_s = start
-                t_e = start + segment_length
-                if start > 0:
-                    t_s = start - segment_stride + segment_length - CALL_LENGTH
-
-                if (i + 1) < len(predictions):
-                    t_e = start + segment_stride + CALL_LENGTH
-                t_e = max(t_s, t_e)
-                track = Track(label, t_s, t_e, r[0], model_name)
+                track = Track(label, start, start + segment_length, r[0], model_name)
                 tracks.append(track)
                 active_tracks[label] = track
             else:
-                track.end = start + segment_stride + CALL_LENGTH
+                track.end = start - segment_stride
                 track.confidences.append(r[0])
             # else:
 
