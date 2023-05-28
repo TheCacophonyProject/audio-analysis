@@ -233,8 +233,9 @@ def classify(file, model_file):
                 track.label == "bird" and specific_bird
             ):
                 track.end = min(length, track.end - segment_stride)
-
-                del active_tracks[track.label]
+                if start >= track.end:
+                    # with smaller strides may have overlaps
+                    del active_tracks[track.label]
 
         for r in results:
             label = r[1]
@@ -246,7 +247,9 @@ def classify(file, model_file):
                 tracks.append(track)
                 active_tracks[label] = track
             else:
-                track.end = start - segment_stride
+                track.end = start + segment_length
+                if track.end > length:
+                    track.end = length
                 track.confidences.append(r[0])
             # else:
 
