@@ -158,6 +158,42 @@ def load_model(model_path):
     return model, meta
 
 
+def get_chirp_samples(rec_data, sr=32000, stride=1):
+    start = 0
+    length = 5
+
+    samples = []
+    while True:
+        sr_s = start * sr
+        sr_e = (start + length) * sr
+        sr_s = int(sr_s)
+        sr_e = int(sr_e)
+        print("start", start, sr_s, " length", length, sr_e)
+        s = rec_data[sr_s:sr_e]
+        start += stride
+        if len(s) < length * sr:
+            s = np.pad(s, (0, int(length * sr - len(s))))
+        samples.append(s)
+        if sr_e >= len(rec_data):
+            break
+    return np.array(samples)
+
+
+def chirp_embeddings(file, stride=5):
+    import tensorflow_hub as hub
+
+    rec_data, sr = load_recording(file, resample=32000)
+    samples = get_chirp_samples(rec_data, sr=sr, stride=stride)
+    # Load the model.
+    model = hub.load("https://tfhub.dev/google/bird-vocalization-classifier/1")
+
+    embeddings = []
+    for s in samples:
+        logits, embedding = model.infer_tf(s[np.newaxis, :])
+        embeddings.append(embedding[0])
+    return np.array(embeddings), len(rec_data) / sr
+
+
 def classify(file, model_file):
     model, meta = load_model(model_file)
     labels = meta.get("labels")
@@ -179,29 +215,34 @@ def classify(file, model_file):
     bird_species = meta.get("bird_species", DEFAULT_SPECIES)
     channels = meta.get("channels", 1)
     prob_thresh = meta.get("threshold", 0.7)
-    frames, sr, samples, length = load_samples(
-        file,
-        segment_length,
-        segment_stride,
-        hop_length,
-        mean_sub=mean_sub,
-        use_mfcc=use_mfcc,
-        htk=htk,
-        mel_break=mel_break,
-        n_mels=n_mels,
-        fmin=fmin,
-        fmax=fmax,
-        channels=channels,
-        power=power,
-        db_scale=db_scale,
-    )
+    if model_name == "embeddings":
+        samples, length = chirp_embeddings(file, segment_stride)
+    else:
+        frames, sr, samples, length = load_samples(
+            file,
+            segment_length,
+            segment_stride,
+            hop_length,
+            mean_sub=mean_sub,
+            use_mfcc=use_mfcc,
+            htk=htk,
+            mel_break=mel_break,
+            n_mels=n_mels,
+            fmin=fmin,
+            fmax=fmax,
+            channels=channels,
+            power=power,
+            db_scale=db_scale,
+        )
     if len(samples) == 0:
         return [], length
+
     predictions = model.predict(samples, verbose=0)
     tracks = []
     start = 0
     active_tracks = {}
     for i, prediction in enumerate(predictions):
+        print("At", start, " have ", np.round(prediction * 100))
         # last sample always ends at length of audio rec
         if start + segment_length > length:
             start = length - segment_length
@@ -259,39 +300,41 @@ def classify(file, model_file):
         #     track = None
 
         start += segment_stride
-    tracks = [t for t in tracks if t.end > t.start]
-    signals, noise = signal_noise(frames, sr, hop_length)
-    signals = join_signals(signals, max_gap=0.2)
-    sorted_tracks = [t for t in tracks if t.label in bird_labels]
-    sorted_tracks = sorted(
-        sorted_tracks,
-        key=lambda track: track.start,
-    )
     chirps = 0
-    last_end = 0
-    track_index = 0
-    for s in signals:
-        if track_index >= len(sorted_tracks):
-            break
-        while track_index < len(sorted_tracks):
-            t = sorted_tracks[track_index]
-            start = t.start
-            end = t.end
-            if start < last_end:
-                start = last_end
-                end = max(start, end)
-            # overlap
-            if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
-                # print("Have track", t, " for ", s, t.start, t.end, t.label)
-                if t.label in bird_labels:
-                    chirps += 1
-                if end > s[1]:
-                    # check next signal
-                    break
-            elif start > s[1]:
-                break
-            last_end = end
-            track_index += 1
+
+    # tracks = [t for t in tracks if t.end > t.start]
+    # signals, noise = signal_noise(frames, sr, hop_length)
+    # signals = join_signals(signals, max_gap=0.2)
+    # sorted_tracks = [t for t in tracks if t.label in bird_labels]
+    # sorted_tracks = sorted(
+    #     sorted_tracks,
+    #     key=lambda track: track.start,
+    # )
+    # chirps = 0
+    # last_end = 0
+    # track_index = 0
+    # for s in signals:
+    #     if track_index >= len(sorted_tracks):
+    #         break
+    #     while track_index < len(sorted_tracks):
+    #         t = sorted_tracks[track_index]
+    #         start = t.start
+    #         end = t.end
+    #         if start < last_end:
+    #             start = last_end
+    #             end = max(start, end)
+    #         # overlap
+    #         if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
+    #             # print("Have track", t, " for ", s, t.start, t.end, t.label)
+    #             if t.label in bird_labels:
+    #                 chirps += 1
+    #             if end > s[1]:
+    #                 # check next signal
+    #                 break
+    #         elif start > s[1]:
+    #             break
+    #         last_end = end
+    #         track_index += 1
     return [t.get_meta() for t in tracks], length, chirps
 
 
