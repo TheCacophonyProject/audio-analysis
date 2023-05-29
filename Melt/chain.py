@@ -28,6 +28,7 @@ def calc_cacophony_index(tracks, length):
     # some recordings are 61 seconds just make last bin size slightly bigger
     last_bin_size = length - period_length * (bins - 1)
     last_bin = None
+    print("last bin is ", last_bin_size)
     if bins > 1 and last_bin_size < 2:
         bins -= 1
         last_bin = length
@@ -36,14 +37,17 @@ def calc_cacophony_index(tracks, length):
         percents.append(
             {
                 "begin_s": i * period_length,
-                "end_s": (i + 1) * period_length,
+                "end_s": min(length, (i + 1) * period_length),
                 "index_percent": 0,
             }
         )
     if last_bin is not None:
         percents[-1]["end_s"] = last_bin
-    period_end = period_length
     period = 0
+    period_length = 20
+    if len(percents) > 0:
+        period_length = percents[period]["end_s"] - percents[period]["begin_s"]
+    period_end = period_length
     for track in other_labels:
         if track["species"] not in NON_BIRD:
             # bird started in existing span
@@ -65,16 +69,19 @@ def calc_cacophony_index(tracks, length):
                     )
 
                     bird_percent = 0
-                    period_end += period_length
                     period += 1
                     period = min(period, bins - 1)
-
+                    period_length = (
+                        percents[period]["end_s"] - percents[period]["begin_s"]
+                    )
+                    period_end += period_length
             # else:
             bird_percent += new_span[1] - new_span[0]
             # bird_until = new_span[1]
             bird_until = new_span[1]
             period = min(len(percents) - 1, int(bird_until / period_length))
             period = min(period, bins - 1)
+            period_length = percents[period]["end_s"] - percents[period]["begin_s"]
     if period < len(percents):
         percents[period]["index_percent"] = round(100 * bird_percent / period_length, 1)
 
