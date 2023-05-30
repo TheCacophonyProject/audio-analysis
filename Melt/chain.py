@@ -94,31 +94,31 @@ def filter_tracks(tracks):
     return filtered
 
 
-def species_identify(file_name, morepork_model, bird_model):
+def species_identify(file_name, morepork_model, bird_models):
     labels = []
     result = {}
     if morepork_model is not None:
         morepork_ids = identify_species(file_name, morepork_model)
         labels.extend(morepork_ids)
-    if bird_model is not None:
-        bird_ids, length, chirps = classify(file_name, bird_model)
-        bird_ids = filter_tracks(bird_ids)
-        labels.extend(bird_ids)
-        cacophony_index, version = calc_cacophony_index(bird_ids, length)
-        result["chirps"] = chirps
-        result["cacophony_index"] = cacophony_index
-        result["cacophony_index_version"] = version
+    if bird_models is not None:
+        for bird_model in bird_models:
+            bird_ids, length, chirps = classify(file_name, bird_model)
+            bird_ids = filter_tracks(bird_ids)
+            labels.extend(bird_ids)
+            cacophony_index, version = calc_cacophony_index(bird_ids, length)
+            result["cacophony_index"] = cacophony_index
+            result["cacophony_index_version"] = version
 
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
-def examine(file_name, morepork_model, bird_model):
+def examine(file_name, morepork_model, bird_models):
     import cacophony_index
 
     summary = cacophony_index.calculate(file_name)
-    summary.update(species_identify(file_name, morepork_model, bird_model))
+    summary.update(species_identify(file_name, morepork_model, bird_models))
     return summary
 
 
@@ -130,7 +130,7 @@ def parse_args():
         help="Calculate old cacophony index on this file",
     )
     parser.add_argument("--morepork-model", help="Path to morepork model")
-    parser.add_argument("--bird-model", help="Path to bird model")
+    parser.add_argument("--bird-model", action="append", help="Path to bird model")
 
     parser.add_argument("file", help="Audio file to run on")
 
