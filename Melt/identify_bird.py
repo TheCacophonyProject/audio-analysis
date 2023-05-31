@@ -299,7 +299,6 @@ def classify(file, model_file):
 
         start += segment_stride
     chirps = 0
-
     # tracks = [t for t in tracks if t.end > t.start]
     # signals, noise = signal_noise(frames, sr, hop_length)
     # signals = join_signals(signals, max_gap=0.2)
