@@ -168,7 +168,6 @@ def get_chirp_samples(rec_data, sr=32000, stride=1):
         sr_e = (start + length) * sr
         sr_s = int(sr_s)
         sr_e = int(sr_e)
-        print("start", start, sr_s, " length", length, sr_e)
         s = rec_data[sr_s:sr_e]
         start += stride
         if len(s) < length * sr:
@@ -242,7 +241,6 @@ def classify(file, model_file):
     start = 0
     active_tracks = {}
     for i, prediction in enumerate(predictions):
-        print("At", start, " have ", np.round(prediction * 100))
         # last sample always ends at length of audio rec
         if start + segment_length > length:
             start = length - segment_length
