@@ -271,7 +271,8 @@ def classify(file, model_file):
             if track.label not in track_labels or (
                 track.label == "bird" and specific_bird
             ):
-                track.end = min(length, track.end - segment_stride)
+                track.end = min(start + segment_length - segment_stride, track.end)
+                track.end = min(length, track.end)
                 if start >= track.end:
                     # with smaller strides may have overlaps
                     del active_tracks[track.label]
@@ -283,6 +284,8 @@ def classify(file, model_file):
             track = active_tracks.get(label, None)
             if track is None:
                 track = Track(label, start, start + segment_length, r[0], model_name)
+                track.end = min(track.end, length)
+
                 tracks.append(track)
                 active_tracks[label] = track
             else:
