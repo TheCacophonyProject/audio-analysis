@@ -158,9 +158,8 @@ def load_model(model_path):
     return model, meta
 
 
-def get_chirp_samples(rec_data, sr=32000, stride=1):
+def get_chirp_samples(rec_data, sr=32000, stride=1, length=5):
     start = 0
-    length = 5
 
     samples = []
     while True:
@@ -193,6 +192,22 @@ def chirp_embeddings(file, stride=5):
     return np.array(embeddings), len(rec_data) / sr
 
 
+def yamn_embeddings(file, stride=1):
+    import tensorflow_hub as hub
+
+    rec_data, sr = load_recording(file, resample=16000)
+    samples = get_chirp_samples(rec_data, sr=sr, stride=stride, length=3)
+    # Load the model.
+    model = hub.load("https://tfhub.dev/google/yamnet/1")
+    # model = hub.load("https://tfhub.dev/google/bird-vocalization-classifier/1")
+
+    embeddings = []
+    for s in samples:
+        logits, embedding, _ = model(s)
+        embeddings.append(embedding)
+    return np.array(embeddings), len(rec_data) / sr
+
+
 def classify(file, model_file):
     model, meta = load_model(model_file)
     labels = meta.get("labels")
@@ -216,6 +231,8 @@ def classify(file, model_file):
     prob_thresh = meta.get("threshold", 0.7)
     if model_name == "embeddings":
         samples, length = chirp_embeddings(file, segment_stride)
+    elif model_name == "yamn-embeddings":
+        samples, length = yamn_embeddings(file, segment_stride)
     else:
         frames, sr, samples, length = load_samples(
             file,
