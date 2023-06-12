@@ -234,7 +234,7 @@ def classify(file, model_file):
             db_scale=db_scale,
         )
     if len(samples) == 0:
-        return [], length
+        return [], length, 0
 
     predictions = model.predict(samples, verbose=0)
     tracks = []
