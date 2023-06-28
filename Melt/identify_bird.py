@@ -319,39 +319,33 @@ def classify(file, model_file):
 
         start += segment_stride
     chirps = 0
-    # tracks = [t for t in tracks if t.end > t.start]
-    # signals, noise = signal_noise(frames, sr, hop_length)
-    # signals = join_signals(signals, max_gap=0.2)
-    # sorted_tracks = [t for t in tracks if t.label in bird_labels]
-    # sorted_tracks = sorted(
-    #     sorted_tracks,
-    #     key=lambda track: track.start,
-    # )
-    # chirps = 0
-    # last_end = 0
-    # track_index = 0
-    # for s in signals:
-    #     if track_index >= len(sorted_tracks):
-    #         break
-    #     while track_index < len(sorted_tracks):
-    #         t = sorted_tracks[track_index]
-    #         start = t.start
-    #         end = t.end
-    #         if start < last_end:
-    #             start = last_end
-    #             end = max(start, end)
-    #         # overlap
-    #         if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
-    #             # print("Have track", t, " for ", s, t.start, t.end, t.label)
-    #             if t.label in bird_labels:
-    #                 chirps += 1
-    #             if end > s[1]:
-    #                 # check next signal
-    #                 break
-    #         elif start > s[1]:
-    #             break
-    #         last_end = end
-    #         track_index += 1
+    tracks = [t for t in tracks if t.end > t.start]
+    signals = signal_noise(frames, sr, hop_length)
+    sorted_tracks = [t for t in tracks if t.label in bird_labels]
+    sorted_tracks = sorted(
+        sorted_tracks,
+        key=lambda track: track.start,
+    )
+    last_end = 0
+    track_index = 0
+    for s in signals:
+        if track_index >= len(sorted_tracks):
+            break
+        while track_index < len(sorted_tracks):
+            t = sorted_tracks[track_index]
+            start = t.start
+            end = t.end
+            if start < last_end:
+                start = last_end
+                end = max(start, end)
+            # overlap
+            if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
+                chirps += 1
+                break
+            elif start > s[1]:
+                break
+            last_end = end
+            track_index += 1
     return [t.get_meta() for t in tracks], length, chirps
 
 
@@ -392,83 +386,44 @@ def signal_noise(frames, sr, hop_length=281):
     column_medians = np.repeat(column_medians, rows, axis=0)
 
     signal = (spectogram > 3 * column_medians) & (spectogram > 3 * row_medians)
-    noise = (spectogram > 2.5 * column_medians) & (spectogram > 2.5 * row_medians)
-    noise[signal == noise] = 0
-    noise = noise.astype(np.uint8)
+
     signal = signal.astype(np.uint8)
     kernel = np.ones((4, 4), np.uint8)
     signal = cv2.morphologyEx(signal, cv2.MORPH_OPEN, kernel)
-    noise = cv2.morphologyEx(noise, cv2.MORPH_OPEN, kernel)
-    # plot_spec(spectogram)
 
-    signal_indicator_vector = np.amax(signal, axis=0)
-    noise_indicator_vector = np.amax(noise, axis=0)
+    min_width = 0.1
+    min_width = min_width * sr / hop_length
+    min_width = int(min_width)
+    width = 0.25  # seconds
+    width = width * sr / hop_length
+    width = int(width)
+    freq_range = 1000
+    height = 0
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    for i, f in enumerate(freqs):
+        if f > freq_range:
+            height = i + 1
+            break
 
-    signal_indicator_vector = signal_indicator_vector[np.newaxis, :]
-    signal_indicator_vector = cv2.dilate(
-        signal_indicator_vector, np.ones((4, 1), np.uint8)
-    )
-    signal_indicator_vector = np.where(signal_indicator_vector > 0, 1, 0)
-    signal_indicator_vector = signal_indicator_vector * 255
+    signal = cv2.dilate(signal, np.ones((height, width), np.uint8))
+    signal = cv2.erode(signal, np.ones((height // 10, width), np.uint8))
 
-    noise_indicator_vector = noise_indicator_vector[np.newaxis, :]
-    noise_indicator_vector = cv2.dilate(
-        noise_indicator_vector, np.ones((4, 1), np.uint8)
-    )
-    noise_indicator_vector = np.where(noise_indicator_vector > 0, 1, 0)
+    components, small_mask, stats, _ = cv2.connectedComponentsWithStats(signal)
+    stats = stats[1:]
+    stats = sorted(stats, key=lambda stat: stat[0])
+    stats = [s for s in stats if s[2] > min_width]
 
-    noise_indicator_vector = noise_indicator_vector * 128
-
-    indicator_vector = np.concatenate(
-        (signal_indicator_vector, noise_indicator_vector), axis=0
-    )
     i = 0
-    indicator_vector = np.uint8(indicator_vector)
+    # indicator_vector = np.uint8(indicator_vector)
     s_start = -1
-    noise_start = -1
     signals = []
-    noise = []
-    for c in indicator_vector.T:
-        # print("indicator", c)
-        if c[0] == 255:
-            if s_start == -1:
-                s_start = i
-        elif s_start != -1:
-            signals.append((s_start * 281 / sr, (i - 1) * 281 / sr))
-            s_start = -1
-        if c[1] == 128:
-            if noise_start == -1:
-                noise_start = i
-        elif noise_start != -1:
-            noise.append((noise_start * 281 / sr, (i - 1) * 281 / sr))
-            noise_start = -1
 
-        i += 1
-    if s_start != -1:
-        signals.append((s_start * 281 / sr, (i - 1) * 281 / sr))
-    if noise_start != -1:
-        noise.append((noise_start * 281 / sr, (i - 1) * 281 / sr))
-    return signals, noise
+    bins = len(freqs)
+    for s in stats:
+        max_freq = min(len(freqs) - 1, s[1] + s[3])
+        freq_range = (freqs[s[1]], freqs[max_freq])
+        start = s[0] * 281 / sr
+        end = (s[0] + s[2]) * 281 / sr
+        signals.append((start, end, freq_range[0], freq_range[1]))
 
-
-# join signals that are close toghetr
-def join_signals(signals, max_gap=0.1):
-    new_signals = []
-    prev_s = None
-    for s in signals:
-        if prev_s is None:
-            prev_s = s
-        else:
-            if s[0] < prev_s[1] + max_gap:
-                # combine them
-                prev_s = (prev_s[0], s[1])
-            else:
-                new_signals.append(prev_s)
-                prev_s = s
-    if prev_s is not None:
-        new_signals.append(prev_s)
-    #
-    # print("spaced have", len(new_signals))
-    # for s in new_signals:
-    #     print(s)
-    return new_signals
+    return signals

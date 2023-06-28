@@ -107,7 +107,7 @@ def species_identify(file_name, morepork_model, bird_models):
             cacophony_index, version = calc_cacophony_index(bird_ids, length)
             result["cacophony_index"] = cacophony_index
             result["cacophony_index_version"] = version
-
+            result["chirps"] = chirps
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
