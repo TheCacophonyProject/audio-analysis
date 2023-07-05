@@ -332,7 +332,6 @@ def classify(file, model_file):
         t.model = model_name
     sorted_tracks = []
     for t in tracks:
-        print(t.labels)
         for l in t.labels:
             if l in bird_labels:
                 sorted_tracks.append(t)
