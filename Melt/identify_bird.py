@@ -110,10 +110,11 @@ def load_samples(
                 mel_break,
                 power=power,
             )
-        half = mel[:, 75:]
+        third = int(mel.shape[1] / 3)
+        half = mel[:, third:]
         if np.amax(half) == np.amin(half):
             # noting usefull here stop early
-            strides_per = math.ceil(segment_length / 2.0 / stride) + 1
+            strides_per = math.ceil(segment_length / 3.0 / stride) + 1
             mel_samples = mel_samples[:-strides_per]
             break
         if db_scale:
@@ -320,7 +321,8 @@ def classify(file, model_file):
         start += segment_stride
     chirps = 0
     tracks = [t for t in tracks if t.end > t.start]
-    signals = signal_noise(frames, sr, hop_length)
+    signal_length = len(samples) * segment_stride + segment_length
+    signals = signal_noise(frames[: int(sr * signal_length)], sr, hop_length)
     sorted_tracks = [t for t in tracks if t.label in bird_labels]
     sorted_tracks = sorted(
         sorted_tracks,
@@ -328,24 +330,20 @@ def classify(file, model_file):
     )
     last_end = 0
     track_index = 0
-    for s in signals:
-        if track_index >= len(sorted_tracks):
-            break
-        while track_index < len(sorted_tracks):
-            t = sorted_tracks[track_index]
-            start = t.start
-            end = t.end
-            if start < last_end:
-                start = last_end
-                end = max(start, end)
-            # overlap
+    # overlapping signals with bird tracks
+    for t in sorted_tracks:
+        start = t.start
+        end = t.end
+        if start < last_end:
+            start = last_end
+            end = max(start, end)
+        for s in signals:
             if ((end - start) + (s[1] - s[0])) > max(end, s[1]) - min(start, s[0]):
                 chirps += 1
+            elif s[0] > start:
                 break
-            elif start > s[1]:
-                break
-            last_end = end
-            track_index += 1
+        last_end = t.end
+
     return [t.get_meta() for t in tracks], length, chirps
 
 
