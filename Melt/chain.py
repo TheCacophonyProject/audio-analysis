@@ -10,7 +10,7 @@ import time
 
 import common
 from identify_species import identify_species
-from identify_bird import classify
+from identify_tracks import classify
 import math
 
 import argparse
@@ -120,6 +120,12 @@ def examine(file_name, morepork_model, bird_model):
     return summary
 
 
+def none_or_str(value):
+    if value.lower() in ["none", "null"]:
+        return None
+    return value
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -130,11 +136,13 @@ def parse_args():
     parser.add_argument(
         "--morepork-model",
         default="models/morepork-model",
+        type=none_or_str,
         help="Path to morepork model",
     )
     parser.add_argument(
         "--bird-model",
         default="/models/bird-model",
+        type=none_or_str,
         help="Path to bird model",
     )
 
