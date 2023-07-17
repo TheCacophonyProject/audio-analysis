@@ -461,7 +461,7 @@ def get_tracks_from_signals(signals):
     to_delete = []
     min_length = 0.5
     for s in unique_signals:
-        s.enlarge(1.2)
+        s.enlarge(1.4)
     for s in unique_signals:
         if s in to_delete:
             continue
