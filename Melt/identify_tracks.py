@@ -335,8 +335,7 @@ def classify(file, model_file):
         for l in t.labels:
             if l in bird_labels:
                 sorted_tracks.append(t)
-                continue
-    # sorted_tracks = [t for t in tracks if t.label in bird_labels]
+                break
     sorted_tracks = sorted(
         sorted_tracks,
         key=lambda track: track.start,
@@ -352,7 +351,7 @@ def classify(file, model_file):
             start = last_end
             end = max(start, end)
         for s in signals:
-            if segment_overlap((start, end), (s.start, s.end)):
+            if segment_overlap((start, end), (s.start, s.end)) > 0:
                 chirps += 1
             elif s.start > start:
                 break
