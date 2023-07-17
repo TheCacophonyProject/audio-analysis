@@ -441,6 +441,7 @@ def mel_freq(f):
 def get_tracks_from_signals(signals):
     unique_signals = []
     f_overlap = 200
+
     for s in signals:
         merged = False
         for u_i, u in enumerate(unique_signals):
@@ -452,7 +453,7 @@ def get_tracks_from_signals(signals):
                 u.merge(s)
                 merged = True
                 break
-            elif mel_overlap > u.mel_freq_range * 0.75 and (s.start - u.end) <= 1:
+            elif mel_overlap > u.mel_freq_range * 0.75 and (s.start - u.end) <= 2:
                 u.merge(s)
                 merged = True
                 break
@@ -460,6 +461,7 @@ def get_tracks_from_signals(signals):
             unique_signals.append(s)
     to_delete = []
     min_length = 0.5
+
     for s in unique_signals:
         s.enlarge(1.4)
     for s in unique_signals:
@@ -480,6 +482,7 @@ def get_tracks_from_signals(signals):
             range *= 0.7
             if f_overlap > range and engulfed:
                 to_delete.append(s2)
+
     for s in to_delete:
         unique_signals.remove(s)
     return unique_signals
