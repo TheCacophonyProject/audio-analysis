@@ -460,7 +460,7 @@ def get_tracks_from_signals(signals):
         if not merged:
             unique_signals.append(s)
     to_delete = []
-    min_length = 0.5
+    min_length = 0.5 * 1.4
 
     for s in unique_signals:
         s.enlarge(1.4)
