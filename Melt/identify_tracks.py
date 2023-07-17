@@ -390,7 +390,7 @@ def signal_noise(frames, sr, hop_length=281):
     width = 0.25  # seconds
     width = width * sr / hop_length
     width = int(width)
-    freq_range = 1000
+    freq_range = 100
     height = 0
     freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
     for i, f in enumerate(freqs):
@@ -440,18 +440,19 @@ def mel_freq(f):
 
 def get_tracks_from_signals(signals):
     unique_signals = []
-    f_overlap = 500
+    f_overlap = 200
     for s in signals:
         merged = False
         for u_i, u in enumerate(unique_signals):
             overlap = s.time_overlap(u)
-            freq_overlap = (
-                abs(s.mel_freq_start - u.mel_freq_start) < f_overlap
-                and abs(s.mel_freq_end - u.mel_freq_end) < f_overlap
-            )
-            if not freq_overlap:
-                continue
-            if overlap > 0 or (s.start - u.end) < 3:
+            mel_overlap = s.mel_freq_overlap(u)
+            range = u.mel_freq_range
+            range *= 0.75
+            if overlap > u.length * 0.75 and mel_overlap > u.mel_freq_range * 0.5:
+                u.merge(s)
+                merged = True
+                break
+            elif mel_overlap > u.mel_freq_range * 0.75 and (s.start - u.end) <= 1:
                 u.merge(s)
                 merged = True
                 break
@@ -459,6 +460,8 @@ def get_tracks_from_signals(signals):
             unique_signals.append(s)
     to_delete = []
     min_length = 0.5
+    for s in unique_signals:
+        s.enlarge(1.2)
     for s in unique_signals:
         if s in to_delete:
             continue
@@ -474,14 +477,11 @@ def get_tracks_from_signals(signals):
             engulfed = overlap >= 0.9 * s2.length
             f_overlap = s.mel_freq_overlap(s2)
             range = s2.mel_freq_range
-            range *= 0.9
+            range *= 0.7
             if f_overlap > range and engulfed:
                 to_delete.append(s2)
     for s in to_delete:
         unique_signals.remove(s)
-
-    for s in unique_signals:
-        s.enlarge(1.2)
     return unique_signals
 
 
@@ -532,7 +532,7 @@ class Signal:
 
     def enlarge(self, scale):
         new_length = self.length * scale
-        extension = new_length / 2
+        extension = (new_length - self.length) / 2
         self.start = self.start - extension
         self.end = self.end + extension
         self.start = max(self.start, 0)
