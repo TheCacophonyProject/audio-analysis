@@ -100,6 +100,8 @@ def load_samples(
                 power,
                 db_scale,
                 channels,
+                # low_pass=t.freq_start,
+                # high_pass=t.freq_end,
             )
             t.spects.append(spect)
             start = start + stride
@@ -125,6 +127,8 @@ def get_spect(
     power,
     db_scale,
     channels=1,
+    low_pass=None,
+    high_pass=None,
 ):
     if not htk:
         mel = librosa.feature.melspectrogram(
@@ -138,6 +142,16 @@ def get_spect(
         )
     else:
         spectogram = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
+        bins = 1 + n_fft / 2
+        max_f = sr / 2
+        gap = max_f / bins
+        if low_pass is not None:
+            min_bin = low_pass // gap
+            spectogram[: int(min_bin)] = 0
+
+        if high_pass is not None:
+            max_bin = high_pass // gap
+            spectogram[int(max_bin) :] = 0
         mel = mel_spec(
             spectogram,
             sr,
@@ -297,7 +311,10 @@ def classify(file, model_file):
         frames, sr = load_recording(file)
         end = get_end(frames, sr)
         signals = signal_noise(frames[: int(sr * end)], sr, hop_length)
-        tracks = get_tracks_from_signals(signals)
+        # want to use signals for chrips
+        tracks = [s.copy() for s in signals]
+        tracks = get_tracks_from_signals(tracks, end)
+
         length = len(frames) / sr
         tracks = load_samples(
             frames,
@@ -350,13 +367,21 @@ def classify(file, model_file):
         if start < last_end:
             start = last_end
             end = max(start, end)
-        for s in signals:
-            if segment_overlap((start, end), (s.start, s.end)) > 0:
+        i = 0
+        while i < len(signals):
+            s = signals[i]
+            if (
+                segment_overlap((start, end), (s.start, s.end)) > 0
+                and t.mel_freq_overlap(s) > -200
+            ):
                 chirps += 1
-            elif s.start > start:
+                # dont want to count twice
+                del signals[i]
+            elif s.start > end:
                 break
+            else:
+                i += 1
         last_end = t.end
-
     return [t.get_meta() for t in tracks], length, chirps
 
 
@@ -437,39 +462,95 @@ def mel_freq(f):
 # try and merge signals that are close together in time and frequency
 
 
-def get_tracks_from_signals(signals):
+def merge_signals(signals):
     unique_signals = []
-    f_overlap = 200
+    to_delete = []
+    something_merged = False
+    i = 0
+
+    signals = sorted(signals, key=lambda s: s.mel_freq_end, reverse=True)
+    signals = sorted(signals, key=lambda s: s.start)
 
     for s in signals:
+        if s in to_delete:
+            continue
         merged = False
-        for u_i, u in enumerate(unique_signals):
+        for u_i, u in enumerate(signals):
+            if u in to_delete:
+                continue
+            if u == s:
+                continue
+            in_freq = u.mel_freq_end < 1500 and s.mel_freq_end < 1500
+            in_freq = in_freq or u.mel_freq_start > 1500 and s.mel_freq_start > 1500
+            # ensure both are either below 1500 or abov
+            if not in_freq:
+                continue
             overlap = s.time_overlap(u)
+            if s.mel_freq_start > 1000 and u.mel_freq_start > 1000:
+                freq_overlap = 0.1
+                freq_overlap_time = 0.5
+            else:
+                freq_overlap = 0.5
+                freq_overlap_time = 0.75
+            if s.start > u.end:
+                time_diff = s.start - u.end
+            else:
+                time_diff = u.start - s.end
             mel_overlap = s.mel_freq_overlap(u)
-            range = u.mel_freq_range
-            range *= 0.75
-            if overlap > u.length * 0.75 and mel_overlap > u.mel_freq_range * 0.5:
-                u.merge(s)
+            if overlap > u.length * 0.75 and mel_overlap > -20:
+                s.merge(u)
                 merged = True
-                break
-            elif mel_overlap > u.mel_freq_range * 0.75 and (s.start - u.end) <= 2:
-                u.merge(s)
-                merged = True
-                break
-        if not merged:
-            unique_signals.append(s)
-    to_delete = []
-    min_length = 0.5 * 1.4
 
-    for s in unique_signals:
-        s.enlarge(1.4)
-    for s in unique_signals:
+                break
+            elif overlap > 0 and mel_overlap > u.mel_freq_range * freq_overlap_time:
+                # time overlaps at all with more freq overlap
+                s.merge(u)
+                merged = True
+
+                break
+
+            elif mel_overlap > u.mel_freq_range * freq_overlap_time and time_diff <= 2:
+                if u.mel_freq_end > s.mel_freq_range:
+                    range_overlap = s.mel_freq_range / u.mel_freq_range
+                else:
+                    range_overlap = u.mel_freq_range / s.mel_freq_range
+                if range_overlap < 0.75:
+                    continue
+                # freq range similar
+                s.merge(u)
+                merged = True
+
+                break
+
+        if merged:
+            something_merged = True
+            to_delete.append(u)
+
+    for s in to_delete:
+        signals.remove(s)
+
+    return signals, something_merged
+
+
+def get_tracks_from_signals(signals, end):
+    # probably a much more efficient way of doing this
+    # just keep merging until there are no more valid merges
+    merged = True
+    while merged:
+        signals, merged = merge_signals(signals)
+
+    to_delete = []
+    min_length = 0.5
+
+    for s in signals:
         if s in to_delete:
             continue
         if s.length < min_length:
             to_delete.append(s)
             continue
-        for s2 in unique_signals:
+        s.enlarge(1.4)
+        s.end = min(end, s.end)
+        for s2 in signals:
             if s2 in to_delete:
                 continue
             if s == s2:
@@ -483,8 +564,8 @@ def get_tracks_from_signals(signals):
                 to_delete.append(s2)
 
     for s in to_delete:
-        unique_signals.remove(s)
-    return unique_signals
+        signals.remove(s)
+    return signals
 
 
 class Signal:
@@ -501,6 +582,9 @@ class Signal:
         self.model = None
         self.labels = None
         self.confidences = None
+
+    def copy(self):
+        return Signal(self.start, self.end, self.freq_start, self.freq_end)
 
     def time_overlap(self, other):
         return segment_overlap(
