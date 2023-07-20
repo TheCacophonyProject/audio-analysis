@@ -293,7 +293,7 @@ def classify(file, model_file):
     model_name = meta.get("name", False)
     use_mfcc = meta.get("use_mfcc", False)
     n_mels = meta.get("n_mels", 80)
-    mel_break = meta.get("mel_break", 1750)
+    mel_break = meta.get("break_freq", 1750)
     htk = meta.get("htk", False)
     fmin = meta.get("fmin", 50)
     fmax = meta.get("fmax", 11000)
