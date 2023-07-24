@@ -10,7 +10,7 @@ import time
 
 import common
 from identify_species import identify_species
-from identify_tracks import classify
+from identify_tracks import classify, max_chirps
 import math
 
 import argparse
@@ -89,7 +89,9 @@ def calc_cacophony_index(tracks, length):
 
 def filter_tracks(tracks):
     filtered_labels = ["noise"]
-    filtered = [t for t in tracks if t["species"] not in filtered_labels]
+    filtered = [
+        t for t in tracks if any([l for l in t["species"] if l not in filtered_labels])
+    ]
     return filtered
 
 
@@ -100,13 +102,16 @@ def species_identify(file_name, morepork_model, bird_model):
         morepork_ids = identify_species(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_model is not None:
-        bird_ids, length, chirps = classify(file_name, bird_model)
-        bird_ids = filter_tracks(bird_ids)
+        bird_ids, length, chirps, signals = classify(file_name, bird_model)
         labels.extend(bird_ids)
-        cacophony_index, version = calc_cacophony_index(bird_ids, length)
+        cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
         result["cacophony_index"] = cacophony_index
         result["cacophony_index_version"] = version
-        result["chirps"] = chirps
+        result["chirps"] = {
+            "chirps": chirps,
+            "max_chirps": max_chirps(length),
+            "signals": [s.to_array() for s in signals],
+        }
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result

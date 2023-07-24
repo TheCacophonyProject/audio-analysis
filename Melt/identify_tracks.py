@@ -21,6 +21,13 @@ DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
 
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
+SIGNAL_WIDTH = 0.25
+
+
+# roughly the max possible chirps
+# assuming no more than 3 birds at any given moment
+def max_chirps(length):
+    return 3 * (length / (SIGNAL_WIDTH + 0.01))
 
 
 def load_recording(file, resample=48000):
@@ -309,13 +316,13 @@ def classify(file, model_file):
         samples, length = yamn_embeddings(file, segment_stride)
     else:
         frames, sr = load_recording(file)
-        end = get_end(frames, sr)
-        signals = signal_noise(frames[: int(sr * end)], sr, hop_length)
+        length = get_end(frames, sr)
+        signals = signal_noise(frames[: int(sr * length)], sr, hop_length)
         # want to use signals for chrips
         tracks = [s.copy() for s in signals]
-        tracks = get_tracks_from_signals(tracks, end)
 
-        length = len(frames) / sr
+        tracks = get_tracks_from_signals(tracks, length)
+
         tracks = load_samples(
             frames,
             sr,
@@ -340,12 +347,14 @@ def classify(file, model_file):
         predictions = model.predict(np.array(t.spects), verbose=0)
         prediction = np.mean(predictions, axis=0)
         p_labels = []
+        confidences = []
         for i, p in enumerate(prediction):
             if p >= prob_thresh:
                 label = labels[i]
                 p_labels.append(label)
+                confidences.append(round(p * 100))
         t.labels = p_labels
-        t.confidences = predictions
+        t.confidences = confidences
         t.model = model_name
     sorted_tracks = []
     for t in tracks:
@@ -382,7 +391,7 @@ def classify(file, model_file):
             else:
                 i += 1
         last_end = t.end
-    return [t.get_meta() for t in tracks], length, chirps
+    return [t.get_meta() for t in tracks], length, chirps, signals
 
 
 def signal_noise(frames, sr, hop_length=281):
@@ -411,8 +420,7 @@ def signal_noise(frames, sr, hop_length=281):
     min_width = 0.1
     min_width = min_width * sr / hop_length
     min_width = int(min_width)
-    width = 0.25  # seconds
-    width = width * sr / hop_length
+    width = SIGNAL_WIDTH * sr / hop_length
     width = int(width)
     freq_range = 100
     height = 0
@@ -583,6 +591,17 @@ class Signal:
         self.labels = None
         self.confidences = None
 
+    def to_array(self, decimals=1):
+        a = [self.start, self.end, self.freq_start, self.freq_end]
+        if decimals is not None:
+            a = list(
+                np.round(
+                    np.array(a),
+                    decimals,
+                )
+            )
+        return a
+
     def copy(self):
         return Signal(self.start, self.end, self.freq_start, self.freq_end)
 
@@ -642,6 +661,5 @@ class Signal:
         meta["species"] = self.labels
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
-        likelihood = float(round((100 * np.mean(np.array(self.confidences))), 2))
-        meta["likelihood"] = likelihood
+        meta["likelihood"] = self.confidences
         return meta
