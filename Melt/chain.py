@@ -9,7 +9,7 @@ import sys
 import time
 
 import common
-from identify_species import identify_species
+from identify_morepork import identify_morepork
 from identify_tracks import classify, max_chirps
 import math
 
@@ -99,7 +99,7 @@ def species_identify(file_name, morepork_model, bird_model):
     labels = []
     result = {}
     if morepork_model is not None:
-        morepork_ids = identify_species(file_name, morepork_model)
+        morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_model is not None:
         bird_ids, length, chirps, signals = classify(file_name, bird_model)

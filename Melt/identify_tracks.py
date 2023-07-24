@@ -348,11 +348,18 @@ def classify(file, model_file):
         prediction = np.mean(predictions, axis=0)
         p_labels = []
         confidences = []
+        max_p = None
         for i, p in enumerate(prediction):
+            if max_p is None or p > max_p[0]:
+                max_p = (i, p)
             if p >= prob_thresh:
                 label = labels[i]
                 p_labels.append(label)
                 confidences.append(round(p * 100))
+        if len(p_labels) == 0:
+            # use max prediction
+            t.raw_tag = labels[max_p[0]]
+            t.raw_confidence = round(max_p[1] * 100)
         t.labels = p_labels
         t.confidences = confidences
         t.model = model_name
@@ -590,6 +597,8 @@ class Signal:
         self.model = None
         self.labels = None
         self.confidences = None
+        self.raw_tag = None
+        self.raw_confidence = None
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
@@ -662,4 +671,8 @@ class Signal:
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
         meta["likelihood"] = self.confidences
+        # used when no actual tag
+        if self.raw_tag is not None:
+            meta["raw_tag"] = self.raw_tag
+            meta["raw_confidence"] = self.raw_confidence
         return meta

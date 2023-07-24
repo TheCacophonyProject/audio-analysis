@@ -124,13 +124,13 @@ def build_entry(begin, end, species, activation):
     entry = {}
     entry["begin_s"] = begin
     entry["end_s"] = end
-    entry["species"] = species
-    entry["likelihood"] = round(activation * 0.01, 2)
+    entry["species"] = [species]
+    entry["likelihood"] = [round(activation * 0.01, 2)]
     entry["model"] = "morepork"
     return entry
 
 
-def identify_species(recording, models):
+def identify_morepork(recording, models):
     # get spectrogram to be checked
     sr, npspec = _load_sample(recording)
 
