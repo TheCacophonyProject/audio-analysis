@@ -350,7 +350,7 @@ def classify(file, model_file):
         confidences = []
         max_p = None
         for i, p in enumerate(prediction):
-            if max_p is None or p > max_p[0]:
+            if max_p is None or p > max_p[1]:
                 max_p = (i, p)
             if p >= prob_thresh:
                 label = labels[i]
