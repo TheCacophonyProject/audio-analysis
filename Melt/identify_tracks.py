@@ -27,7 +27,7 @@ SIGNAL_WIDTH = 0.25
 # roughly the max possible chirps
 # assuming no more than 3 birds at any given moment
 def max_chirps(length):
-    return 3 * (length / (SIGNAL_WIDTH + 0.01))
+    return int(3 * (length / (SIGNAL_WIDTH + 0.01)))
 
 
 def load_recording(file, resample=48000):
