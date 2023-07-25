@@ -244,7 +244,7 @@ def chirp_embeddings(file, tracks, stride=5):
     model = hub.load("https://tfhub.dev/google/bird-vocalization-classifier/1")
 
     embeddings = []
-    for s in samples:
+    for track_sample in samples:
         track_embeddings = []
         for s in track_sample:
             logits, embedding = model.infer_tf(s[np.newaxis, :])
