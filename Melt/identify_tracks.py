@@ -26,7 +26,7 @@ SIGNAL_WIDTH = 0.25
 
 # roughly the max possible chirps
 # assuming no more than 3 birds at any given moment
-def max_chirps(length):
+def get_max_chirps(length):
     return int(3 * (length / (SIGNAL_WIDTH + 0.01)))
 
 
