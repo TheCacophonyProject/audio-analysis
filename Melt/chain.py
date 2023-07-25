@@ -177,7 +177,6 @@ def main():
 
         summary = cacophony_index.calculate(args.file)
     else:
-        print("args.", args.bird_model)
         summary = examine(args.file, args.morepork_model, args.bird_model)
 
     t1 = time.time()
