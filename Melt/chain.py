@@ -113,7 +113,7 @@ def species_identify(file_name, morepork_model, bird_models):
         version = "2.0"
         chirp_index = round(100 * chirps / max_chirps)
         result["cacophony_index"] = [
-            {"begin_s": 0, "end_s": length, "index_percent": cacophony_index}
+            {"begin_s": 0, "end_s": length, "index_percent": chirp_index}
         ]
         result["cacophony_index_tracks"] = cacophony_index
         result["cacophony_index_version"] = version
