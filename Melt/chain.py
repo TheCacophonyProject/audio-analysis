@@ -20,7 +20,9 @@ NON_BIRD = ["human", "noise"]
 
 def calc_cacophony_index(tracks, length):
     version = "1.0"
-    other_labels = [other for other in tracks if other["species"] != "human"]
+    other_labels = [
+        other for other in tracks if other["predictions"][0]["species"] != "human"
+    ]
     bird_percent = 0
     bird_until = -1
     period_length = 20
@@ -48,7 +50,7 @@ def calc_cacophony_index(tracks, length):
         period_length = percents[period]["end_s"] - percents[period]["begin_s"]
     period_end = period_length
     for track in other_labels:
-        if track["species"] not in NON_BIRD:
+        if track["predictions"][0]["species"] not in NON_BIRD:
             # bird started in existing span
             if bird_until >= track["begin_s"] and bird_until < track["end_s"]:
                 new_span = (bird_until, track["end_s"])
@@ -90,19 +92,21 @@ def calc_cacophony_index(tracks, length):
 def filter_tracks(tracks):
     filtered_labels = ["noise"]
     filtered = [
-        t for t in tracks if any([l for l in t["species"] if l not in filtered_labels])
+        t
+        for t in tracks
+        if any([l for l in t["predictions"][0]["species"] if l not in filtered_labels])
     ]
     return filtered
 
 
-def species_identify(file_name, morepork_model, bird_model):
+def species_identify(file_name, morepork_model, bird_models):
     labels = []
     result = {}
     if morepork_model is not None:
         morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
-    if bird_model is not None:
-        bird_ids, length, chirps, signals = classify(file_name, bird_model)
+    if bird_models is not None:
+        bird_ids, length, chirps, signals = classify(file_name, bird_models)
         labels.extend(bird_ids)
         cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
         result["cacophony_index"] = cacophony_index
@@ -146,14 +150,18 @@ def parse_args():
     )
     parser.add_argument(
         "--bird-model",
-        default="/models/bird-model",
+        # default=["/models/bird-model"],
         type=none_or_str,
+        action="append",
         help="Path to bird model",
     )
 
     parser.add_argument("file", help="Audio file to run on")
 
     args = parser.parse_args()
+    if len(args.bird_model) == 0:
+        args.bird_model = ["/models/bird-model"]
+
     return args
 
 
@@ -169,6 +177,7 @@ def main():
 
         summary = cacophony_index.calculate(args.file)
     else:
+        print("args.", args.bird_model)
         summary = examine(args.file, args.morepork_model, args.bird_model)
 
     t1 = time.time()

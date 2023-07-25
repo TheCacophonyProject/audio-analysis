@@ -83,6 +83,7 @@ def load_samples(
     end = segment_length
     mel_samples = []
     for t in tracks:
+        track_data = []
         start = t.start
         end = start + segment_length
         end = min(end, t.end)
@@ -110,13 +111,14 @@ def load_samples(
                 # low_pass=t.freq_start,
                 # high_pass=t.freq_end,
             )
-            t.spects.append(spect)
+            track_data.append(spect)
             start = start + stride
             end = start + segment_length
             # always take 1 sample
             if end > t.end:
                 break
-    return tracks
+        mel_samples.append(track_data)
+    return mel_samples
 
 
 def get_spect(
@@ -210,38 +212,45 @@ def load_model(model_path):
     return model, meta
 
 
-def get_chirp_samples(rec_data, sr=32000, stride=1, length=5):
+def get_chirp_samples(rec_data, tracks, sr=32000, stride=1, length=5):
     start = 0
 
     samples = []
-    while True:
-        sr_s = start * sr
-        sr_e = (start + length) * sr
-        sr_s = int(sr_s)
-        sr_e = int(sr_e)
-        s = rec_data[sr_s:sr_e]
-        start += stride
-        if len(s) < length * sr:
-            s = np.pad(s, (0, int(length * sr - len(s))))
-        samples.append(s)
-        if sr_e >= len(rec_data):
-            break
-    return np.array(samples)
+    sr_length = int(length * sr)
+    sr_stride = stride * sr
+    for track in tracks:
+        track_samples = []
+        start = track.start * sr
+        start = int(start)
+        while True:
+            end = start + sr_length
+            s = rec_data[start:end]
+            if len(s) < length * sr:
+                s = np.pad(s, (0, int(length * sr - len(s))))
+            start += sr_stride
+            track_samples.append(s)
+            if end / sr > track.end:
+                break
+        samples.append(track_samples)
+    return samples
 
 
-def chirp_embeddings(file, stride=5):
+def chirp_embeddings(file, tracks, stride=5):
     import tensorflow_hub as hub
 
     rec_data, sr = load_recording(file, resample=32000)
-    samples = get_chirp_samples(rec_data, sr=sr, stride=stride)
+    samples = get_chirp_samples(rec_data, tracks, sr=sr, stride=stride)
     # Load the model.
     model = hub.load("https://tfhub.dev/google/bird-vocalization-classifier/1")
 
     embeddings = []
     for s in samples:
-        logits, embedding = model.infer_tf(s[np.newaxis, :])
-        embeddings.append(embedding[0])
-    return np.array(embeddings), len(rec_data) / sr
+        track_embeddings = []
+        for s in track_sample:
+            logits, embedding = model.infer_tf(s[np.newaxis, :])
+            track_embeddings.append(embedding[0])
+        embeddings.append(track_embeddings)
+    return embeddings
 
 
 def yamn_embeddings(file, stride=1):
@@ -289,83 +298,85 @@ def get_end(frames, sr):
     return file_length
 
 
-def classify(file, model_file):
-    model, meta = load_model(model_file)
-    labels = meta.get("labels")
-    multi_label = meta.get("multi_label")
-    segment_length = meta.get("segment_length", 3)
-    segment_stride = meta.get("segment_stride", 1.5)
-    hop_length = meta.get("hop_length", 640)
-    mean_sub = meta.get("mean_sub", False)
-    model_name = meta.get("name", False)
-    use_mfcc = meta.get("use_mfcc", False)
-    n_mels = meta.get("n_mels", 80)
-    mel_break = meta.get("break_freq", 1750)
-    htk = meta.get("htk", False)
-    fmin = meta.get("fmin", 50)
-    fmax = meta.get("fmax", 11000)
-    power = meta.get("power", 2)
-    db_scale = meta.get("db_scale", True)
-    bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
-    bird_species = meta.get("bird_species", DEFAULT_SPECIES)
-    channels = meta.get("channels", 1)
-    prob_thresh = meta.get("threshold", 0.7)
-    if model_name == "embeddings":
-        samples, length = chirp_embeddings(file, segment_stride)
-    elif model_name == "yamn-embeddings":
-        samples, length = yamn_embeddings(file, segment_stride)
-    else:
-        frames, sr = load_recording(file)
-        length = get_end(frames, sr)
-        signals = signal_noise(frames[: int(sr * length)], sr, hop_length)
-        # want to use signals for chrips
-        tracks = [s.copy() for s in signals]
+def classify(file, models):
+    frames, sr = load_recording(file)
+    length = get_end(frames, sr)
+    signals = signal_noise(frames[: int(sr * length)], sr, 281)
+    # want to use signals for chrips
+    tracks = [s.copy() for s in signals]
 
-        tracks = get_tracks_from_signals(tracks, length)
+    tracks = get_tracks_from_signals(tracks, length)
+    mel_data = None
 
-        tracks = load_samples(
-            frames,
-            sr,
-            tracks,
-            segment_length,
-            segment_stride,
-            hop_length,
-            mean_sub=mean_sub,
-            use_mfcc=use_mfcc,
-            htk=htk,
-            mel_break=mel_break,
-            n_mels=n_mels,
-            fmin=fmin,
-            fmax=fmax,
-            channels=channels,
-            power=power,
-            db_scale=db_scale,
-        )
-    if len(tracks) == 0:
-        return [], length, 0
-    for t in tracks:
-        predictions = model.predict(np.array(t.spects), verbose=0)
-        prediction = np.mean(predictions, axis=0)
-        p_labels = []
-        confidences = []
-        max_p = None
-        for i, p in enumerate(prediction):
-            if max_p is None or p > max_p[1]:
-                max_p = (i, p)
-            if p >= prob_thresh:
-                label = labels[i]
-                p_labels.append(label)
-                confidences.append(round(p * 100))
-        if len(p_labels) == 0:
-            # use max prediction
-            t.raw_tag = labels[max_p[0]]
-            t.raw_confidence = round(max_p[1] * 100)
-        t.labels = p_labels
-        t.confidences = confidences
-        t.model = model_name
+    for model_file in models:
+        print("running for model", model_file)
+        model, meta = load_model(model_file)
+        labels = meta.get("labels")
+        multi_label = meta.get("multi_label")
+        segment_length = meta.get("segment_length", 3)
+        segment_stride = meta.get("segment_stride", 1.5)
+        hop_length = meta.get("hop_length", 640)
+        mean_sub = meta.get("mean_sub", False)
+        model_name = meta.get("name", False)
+        use_mfcc = meta.get("use_mfcc", False)
+        n_mels = meta.get("n_mels", 80)
+        mel_break = meta.get("break_freq", 1750)
+        htk = meta.get("htk", False)
+        fmin = meta.get("fmin", 50)
+        fmax = meta.get("fmax", 11000)
+        power = meta.get("power", 2)
+        db_scale = meta.get("db_scale", True)
+        bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
+        bird_species = meta.get("bird_species", DEFAULT_SPECIES)
+        channels = meta.get("channels", 1)
+        prob_thresh = meta.get("threshold", 0.7)
+        if model_name == "embeddings":
+            data = chirp_embeddings(file, tracks, segment_stride)
+        else:
+            # if mel_data is None:
+            # print("loading mel data", n_mels)
+            mel_data = load_samples(
+                frames,
+                sr,
+                tracks,
+                segment_length,
+                segment_stride,
+                hop_length,
+                mean_sub=mean_sub,
+                use_mfcc=use_mfcc,
+                htk=htk,
+                mel_break=mel_break,
+                n_mels=n_mels,
+                fmin=fmin,
+                fmax=fmax,
+                channels=channels,
+                power=power,
+                db_scale=db_scale,
+            )
+            data = mel_data
+        if len(data) == 0:
+            return [], length, 0
+        for d, t in zip(data, tracks):
+            predictions = model.predict(np.array(d), verbose=0)
+            prediction = np.mean(predictions, axis=0)
+            max_p = None
+            result = ModelResult(model_name)
+            t.predictions.append(result)
+            for i, p in enumerate(prediction):
+                if max_p is None or p > max_p[1]:
+                    max_p = (i, p)
+                if p >= prob_thresh:
+                    result.labels.append(labels[i])
+                    result.confidences.append(round(p * 100))
+            if len(result.labels) == 0:
+                # use max prediction
+                result.raw_tag = labels[max_p[0]]
+                result.raw_confidence = round(max_p[1] * 100)
     sorted_tracks = []
     for t in tracks:
-        for l in t.labels:
+        # just use first model
+        result = t.predictions[0]
+        for l in result.labels:
             if l in bird_labels:
                 sorted_tracks.append(t)
                 break
@@ -583,6 +594,26 @@ def get_tracks_from_signals(signals, end):
     return signals
 
 
+class ModelResult:
+    def __init__(self, model):
+        self.model = model
+        self.labels = []
+        self.confidences = []
+        self.raw_tag = None
+        self.raw_confidence = None
+
+    def get_meta(self):
+        meta = {}
+        meta["model"] = self.model
+        meta["species"] = self.labels
+        meta["likelihood"] = self.confidences
+        # used when no actual tag
+        if self.raw_tag is not None:
+            meta["raw_tag"] = self.raw_tag
+            meta["raw_confidence"] = self.raw_confidence
+        return meta
+
+
 class Signal:
     def __init__(self, start, end, freq_start, freq_end):
         self.start = start
@@ -592,13 +623,12 @@ class Signal:
 
         self.mel_freq_start = mel_freq(freq_start)
         self.mel_freq_end = mel_freq(freq_end)
-        self.spects = []
-
-        self.model = None
-        self.labels = None
-        self.confidences = None
-        self.raw_tag = None
-        self.raw_confidence = None
+        self.predictions = []
+        # self.model = None
+        # self.labels = None
+        # self.confidences = None
+        # self.raw_tag = None
+        # self.raw_confidence = None
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
@@ -664,15 +694,9 @@ class Signal:
 
     def get_meta(self):
         meta = {}
-        meta["model"] = self.model
         meta["begin_s"] = self.start
         meta["end_s"] = self.end
-        meta["species"] = self.labels
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
-        meta["likelihood"] = self.confidences
-        # used when no actual tag
-        if self.raw_tag is not None:
-            meta["raw_tag"] = self.raw_tag
-            meta["raw_confidence"] = self.raw_confidence
+        meta["predictions"] = [r.get_meta() for r in self.predictions]
         return meta
