@@ -309,7 +309,6 @@ def classify(file, models):
     mel_data = None
 
     for model_file in models:
-        print("running for model", model_file)
         model, meta = load_model(model_file)
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")

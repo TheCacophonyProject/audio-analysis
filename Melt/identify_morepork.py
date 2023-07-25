@@ -124,9 +124,11 @@ def build_entry(begin, end, species, activation):
     entry = {}
     entry["begin_s"] = begin
     entry["end_s"] = end
-    entry["species"] = [species]
-    entry["likelihood"] = [round(activation * 0.01, 2)]
-    entry["model"] = "morepork"
+    prediction = {}
+    prediction["species"] = [species]
+    prediction["likelihood"] = [round(activation * 0.01, 2)]
+    prediction["model"] = "morepork"
+    entry["predictions"] = [prediction]
     return entry
 
 
