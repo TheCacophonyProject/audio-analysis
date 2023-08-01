@@ -354,7 +354,7 @@ def classify(file, models):
             )
             data = mel_data
         if len(data) == 0:
-            return [], length, 0
+            return [], length, 0, []
         for d, t in zip(data, tracks):
             predictions = model.predict(np.array(d), verbose=0)
             prediction = np.mean(predictions, axis=0)
