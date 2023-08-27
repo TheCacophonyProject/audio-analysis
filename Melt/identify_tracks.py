@@ -91,7 +91,7 @@ def load_samples(
             data = frames[int(start * sr) : int(end * sr)]
             if len(data) != sample_size:
                 sample = np.zeros((sample_size))
-                sample[: len(data)] = data
+                sample[:sample_size] = data[:sample_size]
                 data = sample
             spect = get_spect(
                 data,

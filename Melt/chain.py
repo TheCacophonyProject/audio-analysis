@@ -164,7 +164,7 @@ def parse_args():
     parser.add_argument("file", help="Audio file to run on")
 
     args = parser.parse_args()
-    if len(args.bird_model) == 0:
+    if args.bird_model is None or len(args.bird_model) == 0:
         args.bird_model = ["/models/bird-model"]
 
     return args
