@@ -87,12 +87,12 @@ def load_samples(
         start = t.start
         end = start + segment_length
         end = min(end, t.end)
+        sr_start = int(start * sr)
+        sr_end = min(int(end * sr), sr_start + sample_size)
         while True:
-            data = frames[int(start * sr) : int(end * sr)]
+            data = frames[sr_start:sr_end]
             if len(data) != sample_size:
-                sample = np.zeros((sample_size))
-                sample[:sample_size] = data[:sample_size]
-                data = sample
+                data = np.pad(data, (0, sample_size - len(data)))
             spect = get_spect(
                 data,
                 sr,
@@ -111,9 +111,12 @@ def load_samples(
                 # low_pass=t.freq_start,
                 # high_pass=t.freq_end,
             )
+
             track_data.append(spect)
             start = start + stride
             end = start + segment_length
+            sr_start = int(start * sr)
+            sr_end = min(int(end * sr), sr_start + sample_size)
             # always take 1 sample
             if end > t.end:
                 break
