@@ -47,17 +47,17 @@ def load_samples(
     tracks,
     segment_length,
     stride,
-    hop_length=640,
+    hop_length=281,
     mean_sub=False,
     use_mfcc=False,
-    mel_break=1750,
-    htk=False,
-    n_mels=80,
+    mel_break=1000,
+    htk=True,
+    n_mels=160,
     fmin=50,
     fmax=11000,
     channels=1,
-    power=2,
-    db_scale=True,
+    power=1,
+    db_scale=False,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s",
@@ -84,13 +84,19 @@ def load_samples(
     mel_samples = []
     for t in tracks:
         track_data = []
-        start = t.start
+        start = 0
         end = start + segment_length
-        end = min(end, t.end)
-        sr_start = int(start * sr)
-        sr_end = min(int(end * sr), sr_start + sample_size)
+        end = min(end, t.length)
+
+        sr_end = min(int(end * sr), sample_size)
+        sr_start = 0
+        track_frames = frames[int(t.start * sr) : int(t.end * sr)]
+
+        track_frames = butter_bandpass_filter(
+            track_frames, t.freq_start, t.freq_end, sr
+        )
         while True:
-            data = frames[sr_start:sr_end]
+            data = track_frames[sr_start:sr_end]
             if len(data) != sample_size:
                 data = np.pad(data, (0, sample_size - len(data)))
             spect = get_spect(
@@ -108,8 +114,7 @@ def load_samples(
                 power,
                 db_scale,
                 channels,
-                # low_pass=t.freq_start,
-                # high_pass=t.freq_end,
+                # pass_freqs=[t.freq_start, t.freq_end],
             )
 
             track_data.append(spect)
@@ -118,7 +123,7 @@ def load_samples(
             sr_start = int(start * sr)
             sr_end = min(int(end * sr), sr_start + sample_size)
             # always take 1 sample
-            if end > t.end:
+            if end > t.length:
                 break
         mel_samples.append(track_data)
     return mel_samples
@@ -139,8 +144,7 @@ def get_spect(
     power,
     db_scale,
     channels=1,
-    low_pass=None,
-    high_pass=None,
+    pass_freqs=None,
 ):
     if not htk:
         mel = librosa.feature.melspectrogram(
@@ -153,17 +157,20 @@ def get_spect(
             n_mels=n_mels,
         )
     else:
-        spectogram = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
-        bins = 1 + n_fft / 2
-        max_f = sr / 2
-        gap = max_f / bins
-        if low_pass is not None:
-            min_bin = low_pass // gap
-            spectogram[: int(min_bin)] = 0
+        # if pass_freqs is not None:
+        #     data = butter_bandpass_filter(data, pass_freqs[0], pass_freqs[1], sr)
 
-        if high_pass is not None:
-            max_bin = high_pass // gap
-            spectogram[int(max_bin) :] = 0
+        spectogram = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
+        # bins = 1 + n_fft / 2
+        # max_f = sr / 2
+        # gap = max_f / bins
+        # if low_pass is not None:
+        #     min_bin = low_pass // gap
+        #     spectogram[: int(min_bin)] = 0
+        #
+        # if high_pass is not None:
+        #     max_bin = high_pass // gap
+        #     spectogram[int(max_bin) :] = 0
         mel = mel_spec(
             spectogram,
             sr,
@@ -702,3 +709,26 @@ class Signal:
         meta["freq_end"] = self.freq_end
         meta["predictions"] = [r.get_meta() for r in self.predictions]
         return meta
+
+
+from scipy.signal import butter, sosfilt, sosfreqz, freqs
+
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    btype = "lowpass"
+    freqs = []
+    if lowcut > 0:
+        btype = "bandpass"
+        low = lowcut / nyq
+        freqs.append(low)
+    high = highcut / nyq
+    freqs.append(high)
+    sos = butter(order, freqs, analog=False, btype=btype, output="sos")
+    return sos
+
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=2):
+    sos = butter_bandpass(lowcut, highcut, fs, order=order)
+    filtered = sosfilt(sos, data)
+    return filtered
