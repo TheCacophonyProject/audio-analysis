@@ -577,7 +577,7 @@ def get_tracks_from_signals(signals, end):
         signals, merged = merge_signals(signals)
 
     to_delete = []
-    min_length = 0.5
+    min_length = 0.35
 
     for s in signals:
         if s in to_delete:
