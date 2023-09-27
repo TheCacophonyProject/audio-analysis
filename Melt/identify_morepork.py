@@ -124,6 +124,8 @@ def build_entry(begin, end, species, activation):
     entry = {}
     entry["begin_s"] = begin
     entry["end_s"] = end
+    entry["freq_start"] = frequency_min
+    entry["freq_end"] = frequency_max
     prediction = {}
     prediction["species"] = [species]
     prediction["likelihood"] = [round(activation * 0.01, 2)]

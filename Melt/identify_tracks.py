@@ -91,10 +91,12 @@ def load_samples(
         sr_end = min(int(end * sr), sample_size)
         sr_start = 0
         track_frames = frames[int(t.start * sr) : int(t.end * sr)]
-
-        track_frames = butter_bandpass_filter(
-            track_frames, t.freq_start, t.freq_end, sr
-        )
+        if t.freq_start < 500 and t.freq_end < 1300:
+            # bit of a hack, the butter pass causes problems with false kiwis on higher freqs
+            # but seems to work good for noise sounds
+            track_frames = butter_bandpass_filter(
+                track_frames, t.freq_start, t.freq_end, sr
+            )
         while True:
             data = track_frames[sr_start:sr_end]
             if len(data) != sample_size:
