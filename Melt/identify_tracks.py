@@ -58,9 +58,10 @@ def load_samples(
     channels=1,
     power=1,
     db_scale=False,
+    filter_freqs=True,
 ):
     logging.debug(
-        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s",
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s",
         segment_length,
         stride,
         hop_length,
@@ -71,6 +72,7 @@ def load_samples(
         n_mels,
         fmin,
         fmax,
+        filter_freqs,
     )
     mels = []
     i = 0
@@ -91,9 +93,7 @@ def load_samples(
         sr_end = min(int(end * sr), sample_size)
         sr_start = 0
         track_frames = frames[int(t.start * sr) : int(t.end * sr)]
-        if t.freq_start < 500 and t.freq_end < 1300:
-            # bit of a hack, the butter pass causes problems with false kiwis on higher freqs
-            # but seems to work good for noise sounds
+        if filter_freqs:
             track_frames = butter_bandpass_filter(
                 track_frames, t.freq_start, t.freq_end, sr
             )
@@ -322,6 +322,8 @@ def classify(file, models):
 
     for model_file in models:
         model, meta = load_model(model_file)
+        filter_freqs = meta.get("filter_freqs", True)
+
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")
         segment_length = meta.get("segment_length", 3)
@@ -363,6 +365,7 @@ def classify(file, models):
                 channels=channels,
                 power=power,
                 db_scale=db_scale,
+                filter_freqs=filter_freqs,
             )
             data = mel_data
         if len(data) == 0:
@@ -578,14 +581,15 @@ def get_tracks_from_signals(signals, end):
 
     to_delete = []
     min_length = 0.35
-
+    min_track_length = 0.7
     for s in signals:
         if s in to_delete:
             continue
         if s.length < min_length:
             to_delete.append(s)
             continue
-        s.enlarge(1.4)
+        s.enlarge(1.4, min_track_length=min_track_length)
+
         s.end = min(end, s.end)
         for s2 in signals:
             if s2 in to_delete:
@@ -685,12 +689,21 @@ class Signal:
     def length(self):
         return self.end - self.start
 
-    def enlarge(self, scale):
+    def enlarge(self, scale, min_track_length):
         new_length = self.length * scale
+        if new_length < min_track_length:
+            new_length = min_track_length
         extension = (new_length - self.length) / 2
         self.start = self.start - extension
         self.end = self.end + extension
         self.start = max(self.start, 0)
+
+        # also enlarge freq
+        new_length = (self.freq_end - self.freq_start) * scale
+        extension = (new_length - (self.freq_end - self.freq_start)) / 2
+        self.freq_start = self.freq_start - extension
+        self.freq_end = self.freq_end + extension
+        self.freq_start = max(self.freq_start, 0)
 
     def merge(self, other):
         self.start = min(self.start, other.start)
@@ -716,7 +729,7 @@ class Signal:
 from scipy.signal import butter, sosfilt, sosfreqz, freqs
 
 
-def butter_bandpass(lowcut, highcut, fs, order=5):
+def butter_bandpass(lowcut, highcut, fs, order=2):
     nyq = 0.5 * fs
     btype = "lowpass"
     freqs = []
