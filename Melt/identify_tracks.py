@@ -702,8 +702,8 @@ class Signal:
         new_length = (self.freq_end - self.freq_start) * scale
         extension = (new_length - (self.freq_end - self.freq_start)) / 2
         self.freq_start = self.freq_start - extension
-        self.freq_end = self.freq_end + extension
-        self.freq_start = max(self.freq_start, 0)
+        self.freq_end = int(self.freq_end + extension)
+        self.freq_start = int(max(self.freq_start, 0))
 
     def merge(self, other):
         self.start = min(self.start, other.start)
