@@ -322,7 +322,7 @@ def classify(file, models):
 
     for model_file in models:
         model, meta = load_model(model_file)
-        filter_freqs = meta.get("filter_freqs", True)
+        filter_freqs = meta.get("filter_freq", True)
 
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")
