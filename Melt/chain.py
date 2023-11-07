@@ -111,7 +111,7 @@ def species_identify(file_name, morepork_model, bird_models):
         cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
         max_chirps = get_max_chirps(length)
         version = "2.0"
-        chirp_index = round(100 * chirps / max_chirps)
+        chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
 
         result["cacophony_index"] = cacophony_index
         result["cacophony_index_version"] = version
