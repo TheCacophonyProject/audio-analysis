@@ -59,9 +59,10 @@ def load_samples(
     power=1,
     db_scale=False,
     filter_freqs=True,
+    filter_below=None,
 ):
     logging.debug(
-        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s",
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
         segment_length,
         stride,
         hop_length,
@@ -73,6 +74,7 @@ def load_samples(
         fmin,
         fmax,
         filter_freqs,
+        filter_below,
     )
     mels = []
     i = 0
@@ -94,6 +96,13 @@ def load_samples(
         sr_start = 0
         track_frames = frames[int(t.start * sr) : int(t.end * sr)]
         if filter_freqs:
+            track_frames = butter_bandpass_filter(
+                track_frames, t.freq_start, t.freq_end, sr
+            )
+        elif filter_below and t.freq_end < filter_below:
+            logging.info(
+                "Filter freq below %s %s %s", filter_below, t.freq_start, t.freq_end
+            )
             track_frames = butter_bandpass_filter(
                 track_frames, t.freq_start, t.freq_end, sr
             )
@@ -323,6 +332,7 @@ def classify(file, models):
     for model_file in models:
         model, meta = load_model(model_file)
         filter_freqs = meta.get("filter_freq", True)
+        filter_below = meta.get("filter_below", 1000)
 
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")
@@ -366,6 +376,7 @@ def classify(file, models):
                 power=power,
                 db_scale=db_scale,
                 filter_freqs=filter_freqs,
+                filter_below=filter_below,
             )
             data = mel_data
         if len(data) == 0:
