@@ -124,13 +124,17 @@ def build_entry(begin, end, species, activation):
     entry = {}
     entry["begin_s"] = begin
     entry["end_s"] = end
-    entry["species"] = species
-    entry["likelihood"] = round(activation * 0.01, 2)
-    entry["model"] = "morepork"
+    entry["freq_start"] = frequency_min
+    entry["freq_end"] = frequency_max
+    prediction = {}
+    prediction["species"] = [species]
+    prediction["likelihood"] = [round(activation * 0.01, 2)]
+    prediction["model"] = "morepork"
+    entry["predictions"] = [prediction]
     return entry
 
 
-def identify_species(recording, metadata, models):
+def identify_morepork(recording, models):
     # get spectrogram to be checked
     sr, npspec = _load_sample(recording)
 
@@ -148,6 +152,17 @@ def identify_species(recording, metadata, models):
         sample = librosa.amplitude_to_db(sample, ref=np.max)
         if sample.min() != 0:
             sample = sample / abs(sample.min()) + 1.0
+        if sample.shape[1] < 60:
+            sample = np.pad(
+                sample,
+                (
+                    (
+                        0,
+                        0,
+                    ),
+                    (0, 60 - sample.shape[1]),
+                ),
+            )
         samples.append(sample.reshape(sample.shape + (1,)))
     samples = np.array(samples)
 

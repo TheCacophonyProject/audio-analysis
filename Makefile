@@ -12,3 +12,4 @@ docker-no-cache:
 docker-push: docker
 	docker tag $(hub_repo) $(hub_repo):$(TAG)
 	docker push $(hub_repo):$(TAG)
+	docker push $(hub_repo):latest
