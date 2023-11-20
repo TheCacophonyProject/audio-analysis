@@ -716,6 +716,9 @@ class Signal:
         self.freq_end = int(self.freq_end + extension)
         self.freq_start = int(max(self.freq_start, 0))
 
+        self.mel_freq_start = mel_freq(self.freq_start)
+        self.mel_freq_end = mel_freq(self.freq_end)
+
     def merge(self, other):
         self.start = min(self.start, other.start)
         self.end = max(self.end, other.end)
