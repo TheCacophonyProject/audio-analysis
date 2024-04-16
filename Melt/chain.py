@@ -12,8 +12,9 @@ import common
 from identify_morepork import identify_morepork
 from identify_tracks import classify, get_max_chirps
 import math
-
+from pathlib import Path
 import argparse
+import json
 
 NON_BIRD = ["human", "noise"]
 
@@ -99,38 +100,45 @@ def filter_tracks(tracks):
     return filtered
 
 
-def species_identify(file_name, morepork_model, bird_models):
+def species_identify(file_name, morepork_model, bird_models,analyse_tracks):
     labels = []
     result = {}
-    if morepork_model is not None:
+    meta_file = Path(file_name).with_suffix(".txt")
+    meta_data = None
+    if meta_file.exists():
+        with meta_file.open("r") as f:
+            meta_data = json.load(f)
+    if morepork_model is not None and not analyse_tracks:
         morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_models is not None:
-        bird_ids, length, chirps, signals = classify(file_name, bird_models)
+        bird_ids, length, chirps, signals = classify(file_name, bird_models,analyse_tracks,meta_data)
         labels.extend(bird_ids)
         cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
-        max_chirps = get_max_chirps(length)
-        version = "2.0"
-        chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
+        if not analyse_tracks: 
+            max_chirps = get_max_chirps(length)
+            version = "2.0"
+            chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
 
-        result["cacophony_index"] = cacophony_index
-        result["cacophony_index_version"] = version
-        result["chirps"] = {
-            "chirps": chirps,
-            "max_chirps": max_chirps,
-            "chirp_index": chirp_index,
-            "signals": [s.to_array() for s in signals],
-        }
+            result["cacophony_index"] = cacophony_index
+            result["cacophony_index_version"] = version
+            result["chirps"] = {
+                "chirps": chirps,
+                "max_chirps": max_chirps,
+                "chirp_index": chirp_index,
+                "signals": [s.to_array() for s in signals],
+            }
+            
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
-def examine(file_name, morepork_model, bird_model):
+def examine(file_name, morepork_model, bird_model,analyse_tracks=False):
     import cacophony_index
 
     summary = cacophony_index.calculate(file_name)
-    summary.update(species_identify(file_name, morepork_model, bird_model))
+    summary.update(species_identify(file_name, morepork_model, bird_model,analyse_tracks))
     return summary
 
 
@@ -163,12 +171,29 @@ def parse_args():
 
     parser.add_argument("file", help="Audio file to run on")
 
+    parser.add_argument(
+        "--analyse-tracks",
+        type=str2bool,
+        default=False,
+        help="Classify human made tracks marked with classify flag, in metadata file",
+    )
+
     args = parser.parse_args()
     if args.bird_model is None or len(args.bird_model) == 0:
         args.bird_model = ["/models/bird-model"]
 
     return args
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 def main():
     args = parse_args()
@@ -182,7 +207,7 @@ def main():
 
         summary = cacophony_index.calculate(args.file)
     else:
-        summary = examine(args.file, args.morepork_model, args.bird_model)
+        summary = examine(args.file, args.morepork_model, args.bird_model, analyse_tracks = args.analyse_tracks )
 
     t1 = time.time()
 

@@ -22,6 +22,7 @@ DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
 SIGNAL_WIDTH = 0.25
+MAX_FRQUENCY = 48000 / 2
 
 
 # roughly the max possible chirps
@@ -319,14 +320,30 @@ def get_end(frames, sr):
     return file_length
 
 
-def classify(file, models):
+def classify(file, models,analyse_tracks,meta_data = None):
     frames, sr = load_recording(file)
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
     # want to use signals for chrips
-    tracks = [s.copy() for s in signals]
+    
+    if analyse_tracks:
+        if meta_data is None:
+            return
+        meta_tracks = [t for t in meta_data["Tracks"] if t.get("classify")]
+        tracks = []
+        for t in meta_tracks:
+            pos = t["data"]["positions"][0]
+            freq_start = pos["y"] * MAX_FRQUENCY
+            freq_end = pos["height"]*MAX_FRQUENCY + freq_start
 
-    tracks = get_tracks_from_signals(tracks, length)
+            # add to signals also???
+            signal = Signal(t["data"]["start_s"], t["data"]["end_s"], freq_start,freq_end)
+            signal.track_id = t["id"]
+            tracks.append(signal)
+    else:
+        tracks = [s.copy() for s in signals]
+
+        tracks = get_tracks_from_signals(tracks, length)
     mel_data = None
 
     for model_file in models:
@@ -650,6 +667,7 @@ class Signal:
         self.mel_freq_start = mel_freq(freq_start)
         self.mel_freq_end = mel_freq(freq_end)
         self.predictions = []
+        self.track_id = None
         # self.model = None
         # self.labels = None
         # self.confidences = None
@@ -737,6 +755,8 @@ class Signal:
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
         meta["predictions"] = [r.get_meta() for r in self.predictions]
+        if self.track_id is not None:
+            meta["track_id"] = self.track_id
         return meta
 
 
