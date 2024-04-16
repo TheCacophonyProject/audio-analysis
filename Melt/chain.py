@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 import argparse
 import json
+
 NON_BIRD = ["human", "noise"]
 
 
@@ -127,6 +128,7 @@ def species_identify(file_name, morepork_model, bird_models,analyse_tracks):
                 "chirp_index": chirp_index,
                 "signals": [s.to_array() for s in signals],
             }
+            
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
