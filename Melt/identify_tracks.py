@@ -325,19 +325,18 @@ def classify(file, models,analyse_tracks,meta_data = None):
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
     # want to use signals for chrips
-    
     if analyse_tracks:
         if meta_data is None:
             return
-        meta_tracks = [t for t in meta_data["Tracks"] if t.get("classify")]
+        meta_tracks = [t for t in meta_data["Tracks"] ]
         tracks = []
         for t in meta_tracks:
-            pos = t["data"]["positions"][0]
+            pos = t["positions"][0]
             freq_start = pos["y"] * MAX_FRQUENCY
             freq_end = pos["height"]*MAX_FRQUENCY + freq_start
 
             # add to signals also???
-            signal = Signal(t["data"]["start_s"], t["data"]["end_s"], freq_start,freq_end)
+            signal = Signal(t["start"], t["end"], freq_start,freq_end)
             signal.track_id = t["id"]
             tracks.append(signal)
     else:
