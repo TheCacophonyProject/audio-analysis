@@ -91,7 +91,7 @@ def calc_cacophony_index(tracks, length):
 
 
 def filter_tracks(tracks):
-    filtered_labels = ["noise"]
+    filtered_labels = ["noise","insect"]
     filtered = [
         t
         for t in tracks
