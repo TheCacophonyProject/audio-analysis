@@ -320,7 +320,7 @@ def get_end(frames, sr):
     return file_length
 
 
-def classify(file, models,analyse_tracks,meta_data = None):
+def classify(file, models, analyse_tracks, meta_data=None):
     frames, sr = load_recording(file)
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
@@ -328,15 +328,15 @@ def classify(file, models,analyse_tracks,meta_data = None):
     if analyse_tracks:
         if meta_data is None:
             return
-        meta_tracks = [t for t in meta_data["Tracks"] ]
+        meta_tracks = [t for t in meta_data["Tracks"]]
         tracks = []
         for t in meta_tracks:
             pos = t["positions"][0]
             freq_start = pos["y"] * MAX_FRQUENCY
-            freq_end = pos["height"]*MAX_FRQUENCY + freq_start
+            freq_end = pos["height"] * MAX_FRQUENCY + freq_start
 
             # add to signals also???
-            signal = Signal(t["start"], t["end"], freq_start,freq_end)
+            signal = Signal(t["start"], t["end"], freq_start, freq_end)
             signal.track_id = t["id"]
             tracks.append(signal)
     else:
@@ -450,7 +450,7 @@ def classify(file, models,analyse_tracks,meta_data = None):
             else:
                 i += 1
         last_end = t.end
-    return [t.get_meta() for t in tracks], length, chirps, signals
+    return tracks, length, chirps, signals
 
 
 def signal_noise(frames, sr, hop_length=281):
