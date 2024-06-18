@@ -16,14 +16,11 @@ from pathlib import Path
 import argparse
 import json
 
-NON_BIRD = ["human", "noise"]
+NON_BIRD = ["human", "noise", "insect"]
 
 
 def calc_cacophony_index(tracks, length):
     version = "1.0"
-    other_labels = [
-        other for other in tracks if other["predictions"][0]["species"] != "human"
-    ]
     bird_percent = 0
     bird_until = -1
     period_length = 20
@@ -50,40 +47,37 @@ def calc_cacophony_index(tracks, length):
     if len(percents) > 0:
         period_length = percents[period]["end_s"] - percents[period]["begin_s"]
     period_end = period_length
-    for track in other_labels:
-        if track["predictions"][0]["species"] not in NON_BIRD:
-            # bird started in existing span
-            if bird_until >= track["begin_s"] and bird_until < track["end_s"]:
-                new_span = (bird_until, track["end_s"])
-            # bird started after current span
-            elif bird_until < track["end_s"]:
-                new_span = (track["begin_s"], track["end_s"])
-            else:
-                continue
-            if new_span[1] > period_end:
-                while new_span[1] > period_end:
-                    if new_span[0] < period_end:
-                        bird_percent += period_end - new_span[0]
-                        new_span = (period_end, new_span[1])
-                        # bird_percent = min(period_length, new_span[1] - period_end)
-                    percents[period]["index_percent"] = round(
-                        100 * bird_percent / period_length, 1
-                    )
+    for track in tracks:
+        # bird started in existing span
+        if bird_until >= track.start and bird_until < track.end:
+            new_span = (bird_until, track.end)
+        # bird started after current span
+        elif bird_until < track.end:
+            new_span = (track.start, track.end)
+        else:
+            continue
+        if new_span[1] > period_end:
+            while new_span[1] > period_end:
+                if new_span[0] < period_end:
+                    bird_percent += period_end - new_span[0]
+                    new_span = (period_end, new_span[1])
+                    # bird_percent = min(period_length, new_span[1] - period_end)
+                percents[period]["index_percent"] = round(
+                    100 * bird_percent / period_length, 1
+                )
 
-                    bird_percent = 0
-                    period += 1
-                    period = min(period, bins - 1)
-                    period_length = (
-                        percents[period]["end_s"] - percents[period]["begin_s"]
-                    )
-                    period_end += period_length
-            # else:
-            bird_percent += new_span[1] - new_span[0]
-            # bird_until = new_span[1]
-            bird_until = new_span[1]
-            period = min(len(percents) - 1, int(bird_until / period_length))
-            period = min(period, bins - 1)
-            period_length = percents[period]["end_s"] - percents[period]["begin_s"]
+                bird_percent = 0
+                period += 1
+                period = min(period, bins - 1)
+                period_length = percents[period]["end_s"] - percents[period]["begin_s"]
+                period_end += period_length
+        # else:
+        bird_percent += new_span[1] - new_span[0]
+        # bird_until = new_span[1]
+        bird_until = new_span[1]
+        period = min(len(percents) - 1, int(bird_until / period_length))
+        period = min(period, bins - 1)
+        period_length = percents[period]["end_s"] - percents[period]["begin_s"]
     if period < len(percents):
         percents[period]["index_percent"] = round(100 * bird_percent / period_length, 1)
 
@@ -91,16 +85,16 @@ def calc_cacophony_index(tracks, length):
 
 
 def filter_tracks(tracks):
-    filtered_labels = ["noise"]
     filtered = [
         t
         for t in tracks
-        if any([l for l in t["predictions"][0]["species"] if l not in filtered_labels])
+        if len(t.predictions[0].labels) > 0
+        and any([l for l in t.predictions[0].labels if l not in NON_BIRD])
     ]
     return filtered
 
 
-def species_identify(file_name, morepork_model, bird_models,analyse_tracks):
+def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     labels = []
     result = {}
     meta_file = Path(file_name).with_suffix(".txt")
@@ -112,10 +106,12 @@ def species_identify(file_name, morepork_model, bird_models,analyse_tracks):
         morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_models is not None:
-        bird_ids, length, chirps, signals = classify(file_name, bird_models,analyse_tracks,meta_data)
-        labels.extend(bird_ids)
+        bird_ids, length, chirps, signals = classify(
+            file_name, bird_models, analyse_tracks, meta_data
+        )
+        labels.extend([track.get_meta() for track in bird_ids])
         cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
-        if not analyse_tracks: 
+        if not analyse_tracks:
             max_chirps = get_max_chirps(length)
             version = "2.0"
             chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
@@ -128,17 +124,19 @@ def species_identify(file_name, morepork_model, bird_models,analyse_tracks):
                 "chirp_index": chirp_index,
                 "signals": [s.to_array() for s in signals],
             }
-            
+
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
-def examine(file_name, morepork_model, bird_model,analyse_tracks=False):
+def examine(file_name, morepork_model, bird_model, analyse_tracks=False):
     import cacophony_index
 
     summary = cacophony_index.calculate(file_name)
-    summary.update(species_identify(file_name, morepork_model, bird_model,analyse_tracks))
+    summary.update(
+        species_identify(file_name, morepork_model, bird_model, analyse_tracks)
+    )
     return summary
 
 
@@ -195,6 +193,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
 
+
 def main():
     args = parse_args()
 
@@ -207,7 +206,12 @@ def main():
 
         summary = cacophony_index.calculate(args.file)
     else:
-        summary = examine(args.file, args.morepork_model, args.bird_model, analyse_tracks = args.analyse_tracks )
+        summary = examine(
+            args.file,
+            args.morepork_model,
+            args.bird_model,
+            analyse_tracks=args.analyse_tracks,
+        )
 
     t1 = time.time()
 
