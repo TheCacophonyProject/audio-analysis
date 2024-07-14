@@ -106,24 +106,26 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
         morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
     if bird_models is not None:
-        bird_ids, length, chirps, signals = classify(
-            file_name, bird_models, analyse_tracks, meta_data
-        )
-        labels.extend([track.get_meta() for track in bird_ids])
-        cacophony_index, version = calc_cacophony_index(filter_tracks(bird_ids), length)
-        if not analyse_tracks:
-            max_chirps = get_max_chirps(length)
-            version = "2.0"
-            chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
+        classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
+        if classify_res is not None:
+            bird_ids, length, chirps, signals = classify_res
+            labels.extend([track.get_meta() for track in bird_ids])
+            cacophony_index, version = calc_cacophony_index(
+                filter_tracks(bird_ids), length
+            )
+            if not analyse_tracks:
+                max_chirps = get_max_chirps(length)
+                version = "2.0"
+                chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
 
-            result["cacophony_index"] = cacophony_index
-            result["cacophony_index_version"] = version
-            result["chirps"] = {
-                "chirps": chirps,
-                "max_chirps": max_chirps,
-                "chirp_index": chirp_index,
-                "signals": [s.to_array() for s in signals],
-            }
+                result["cacophony_index"] = cacophony_index
+                result["cacophony_index_version"] = version
+                result["chirps"] = {
+                    "chirps": chirps,
+                    "max_chirps": max_chirps,
+                    "chirp_index": chirp_index,
+                    "signals": [s.to_array() for s in signals],
+                }
 
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
