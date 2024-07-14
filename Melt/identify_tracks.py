@@ -43,7 +43,8 @@ def load_recording(file, resample=48000):
         return frames, sr
     except:
         logging.error("Could not load %s", file, exc_info=True)
-        return None
+        # for some reason the original exception causes docker to hang
+        raise Exception(f"Could not load {file}")
 
 
 def load_samples(
@@ -326,8 +327,6 @@ def get_end(frames, sr):
 
 def classify(file, models, analyse_tracks, meta_data=None):
     rec_data = load_recording(file)
-    if rec_data is None:
-        return None
     frames, sr = rec_data
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
