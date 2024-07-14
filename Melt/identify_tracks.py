@@ -32,14 +32,19 @@ def get_max_chirps(length):
 
 
 def load_recording(file, resample=48000):
-    # librosa.load(file) giving strange results
-    aro = audioread.ffdec.FFmpegAudioFile(file)
-    frames, sr = librosa.load(aro, sr=None)
-    aro.close()
-    if resample is not None and resample != sr:
-        frames = librosa.resample(frames, orig_sr=sr, target_sr=resample)
-        sr = resample
-    return frames, sr
+    try:
+        # librosa.load(file) giving strange results
+        aro = audioread.ffdec.FFmpegAudioFile(file)
+        frames, sr = librosa.load(aro, sr=None)
+        aro.close()
+        if resample is not None and resample != sr:
+            frames = librosa.resample(frames, orig_sr=sr, target_sr=resample)
+            sr = resample
+        return frames, sr
+    except:
+        logging.error("Could not load %s", file, exc_info=True)
+        # for some reason the original exception causes docker to hang
+        raise Exception(f"Could not load {file}")
 
 
 def load_samples(
@@ -327,7 +332,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
     # want to use signals for chrips
     if analyse_tracks:
         if meta_data is None:
-            return
+            return None
         meta_tracks = [t for t in meta_data["Tracks"]]
         tracks = []
         for t in meta_tracks:
