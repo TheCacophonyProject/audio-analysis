@@ -55,7 +55,7 @@ jobs:
         name: Build and push
         uses: docker/build-push-action@v6
         with:
-          file: ./docker/Dockerfile
+          file: ./Dockerfile
           push: true
           # tags: cacophonyproject/classifier:latest
           tags: ${{ steps.meta.outputs.tags }}
