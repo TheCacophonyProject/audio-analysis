@@ -225,7 +225,9 @@ def main():
 
 
 if __name__ == "__main__":
+    result = 0
     try:
-        sys.exit(main())
+        result = main()
     except:
-        sys.exit(1)
+        result = 1
+    sys.exit(result)
