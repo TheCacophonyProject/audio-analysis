@@ -157,7 +157,7 @@ def parse_args():
     )
     parser.add_argument(
         "--morepork-model",
-        default="models/morepork-model",
+        default=None,
         type=none_or_str,
         help="Path to morepork model",
     )
