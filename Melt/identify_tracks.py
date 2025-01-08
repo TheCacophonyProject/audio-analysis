@@ -608,6 +608,8 @@ def get_tracks_from_signals(signals, end):
     # probably a much more efficient way of doing this
     # just keep merging until there are no more valid merges
     merged = True
+    min_mel_range = 50
+
     while merged:
         signals, merged = merge_signals(signals)
 
@@ -636,6 +638,12 @@ def get_tracks_from_signals(signals, end):
             if f_overlap > range and engulfed:
                 to_delete.append(s2)
 
+    for s in to_delete:
+        signals.remove(s)
+    to_delete = []
+    for s in signals:
+        if s.mel_freq_range < min_mel_range:
+            to_delete.append(s)
     for s in to_delete:
         signals.remove(s)
     return signals

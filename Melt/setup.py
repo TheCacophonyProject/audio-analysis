@@ -5,7 +5,7 @@ scripts = [
     "chain.py",
     "common.py",
     "identify_species.py",
-    "identify_bird.py",
+    "identify_tracks.py",
 ]
 
 reqs = [
