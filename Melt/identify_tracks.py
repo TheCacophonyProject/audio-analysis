@@ -24,6 +24,23 @@ DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
 SIGNAL_WIDTH = 0.25
 MAX_FRQUENCY = 48000 / 2
 
+# tensorflow refuces to load without this
+@tf.keras.utils.register_keras_serializable(package="MyLayers", name="MagTransform")
+class MagTransform(tf.keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super(MagTransform, self).__init__(**kwargs)
+        self.a = self.add_weight(
+            initializer=tf.keras.initializers.Constant(value=0.0),
+            name="a-power",
+            dtype="float32",
+            shape=(),
+            trainable=True,
+        )
+
+    def call(self, inputs):
+        c = tf.math.pow(inputs, tf.math.sigmoid(self.a))
+        return c
+
 
 # roughly the max possible chirps
 # assuming no more than 3 birds at any given moment
@@ -226,16 +243,23 @@ def get_spect(
 
 
 def load_model(model_path):
-    model_path = Path(model_path)
-    logging.debug("Loading %s", str(model_path))
-    model = tf.keras.models.load_model(
-        str(model_path),
-        compile=False,
-    )
-    # model.load_weights(model_path / "val_binary_accuracy").expect_partial()
-    meta_file = model_path / "metadata.txt"
-    with open(meta_file, "r") as f:
-        meta = json.load(f)
+    try:
+        model_path = Path(model_path)
+        logging.info("Loading %s", str(model_path))
+        model = tf.keras.models.load_model(
+            str(model_path),
+            # compile=False,
+        )
+        # model.load_weights(model_path / "val_binary_accuracy").expect_partial()
+        if model_path.is_file():
+            meta_file = model_path.parent / "metadata.txt"
+        else:
+            meta_file = model_path / "metadata.txt"
+
+        with open(meta_file, "r") as f:
+            meta = json.load(f)
+    except:
+        logging.info("Could not load model" , exc_info=True)
     return model, meta
 
 
@@ -349,12 +373,13 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
         tracks = get_tracks_from_signals(tracks, length)
     mel_data = None
-
     for model_file in models:
         model, meta = load_model(model_file)
         filter_freqs = meta.get("filter_freq", True)
         filter_below = meta.get("filter_below", 1000)
 
+
+        ebird_ids = meta.get("ebird_ids")
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")
         segment_length = meta.get("segment_length", 3)
@@ -377,8 +402,6 @@ def classify(file, models, analyse_tracks, meta_data=None):
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
-            # if mel_data is None:
-            # print("loading mel data", n_mels)
             mel_data = load_samples(
                 frames,
                 sr,
@@ -413,11 +436,15 @@ def classify(file, models, analyse_tracks, meta_data=None):
                     max_p = (i, p)
                 if p >= prob_thresh:
                     result.labels.append(labels[i])
+                    if ebird_ids is not None:
+                        result.ebird_ids.append(ebird_ids[i])
                     result.confidences.append(round(p * 100))
             if len(result.labels) == 0:
                 # use max prediction
                 result.raw_tag = labels[max_p[0]]
                 result.raw_confidence = round(max_p[1] * 100)
+                if ebird_ids is not None:
+                    result.ebird_ids.append(ebird_ids[max_p[0]])
     sorted_tracks = []
     for t in tracks:
         # just use first model
@@ -652,7 +679,9 @@ def get_tracks_from_signals(signals, end):
 class ModelResult:
     def __init__(self, model):
         self.model = model
+        self.filtered_labels = []
         self.labels = []
+        self.ebird_ids = []
         self.confidences = []
         self.raw_tag = None
         self.raw_confidence = None
@@ -660,12 +689,17 @@ class ModelResult:
     def get_meta(self):
         meta = {}
         meta["model"] = self.model
+        meta["filtered_species"] = self.filtered_labels
         meta["species"] = self.labels
         meta["likelihood"] = self.confidences
         # used when no actual tag
         if self.raw_tag is not None:
             meta["raw_tag"] = self.raw_tag
             meta["raw_confidence"] = self.raw_confidence
+            meta["raw_ebird_ids"] = self.ebird_ids
+        else:
+            meta["ebird_ids"] = self.ebird_ids
+
         return meta
 
 
