@@ -109,7 +109,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     if bird_models is not None:
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
-            bird_ids, length, chirps, signals,raw_length = classify_res
+            bird_ids, length, chirps, signals, raw_length = classify_res
             labels.extend([track.get_meta() for track in bird_ids])
             cacophony_index, version = calc_cacophony_index(
                 filter_tracks(bird_ids), length
@@ -230,7 +230,7 @@ def main():
     else:
         audio_file = Path(args.file)
         metadata_file = audio_file.with_suffix(".txt")
-        logging.info("Writing metadata to %s",metadata_file)
+        logging.info("Writing metadata to %s", metadata_file)
 
         if metadata_file.exists():
             with metadata_file.open("r") as f:
@@ -239,9 +239,11 @@ def main():
             metadata = {}
         metadata["analysis_result"] = summary
         with metadata_file.open("w") as f:
-            json.dump(metadata,f, sort_keys=True, indent=4)
+            json.dump(metadata, f, sort_keys=True, indent=4)
 
     return result
+
+
 def init_logging():
 
     fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
@@ -250,9 +252,10 @@ def init_logging():
         stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
 
+
 if __name__ == "__main__":
     try:
         main()
     except:
-        logging.error("Terminated with error",exc_info=True)
+        logging.error("Terminated with error", exc_info=True)
         sys.exit(1)
