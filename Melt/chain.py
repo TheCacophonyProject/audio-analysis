@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 import argparse
 import json
+import logging
 
 NON_BIRD = ["human", "noise", "insect"]
 
@@ -108,7 +109,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     if bird_models is not None:
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
-            bird_ids, length, chirps, signals = classify_res
+            bird_ids, length, chirps, signals,raw_length = classify_res
             labels.extend([track.get_meta() for track in bird_ids])
             cacophony_index, version = calc_cacophony_index(
                 filter_tracks(bird_ids), length
@@ -117,7 +118,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                 max_chirps = get_max_chirps(length)
                 version = "2.0"
                 chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
-
+                result["duration"] = raw_length
                 result["cacophony_index"] = cacophony_index
                 result["cacophony_index_version"] = version
                 result["chirps"] = {
@@ -150,6 +151,12 @@ def none_or_str(value):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-o",
+        "--meta-to-stdout",
+        action="count",
+        help="Print metadata to stdout instead of saving to file.",
+    )
     parser.add_argument(
         "--old-cacophony-index",
         action="count",
@@ -198,7 +205,7 @@ def str2bool(v):
 
 def main():
     args = parse_args()
-
+    init_logging()
     t0 = time.time()
     summary = None
     result = 0
@@ -218,14 +225,34 @@ def main():
     t1 = time.time()
 
     summary["processing_time_seconds"] = round(t1 - t0, 1)
+    if args.meta_to_stdout:
+        print(common.jsdump(summary))
+    else:
+        audio_file = Path(args.file)
+        metadata_file = audio_file.with_suffix(".txt")
+        logging.info("Writing metadata to %s",metadata_file)
 
-    print(common.jsdump(summary))
+        if metadata_file.exists():
+            with metadata_file.open("r") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+        metadata["analysis_result"] = summary
+        with metadata_file.open("w") as f:
+            json.dump(metadata,f, sort_keys=True, indent=4)
 
     return result
+def init_logging():
 
+    fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
+
+    logging.basicConfig(
+        stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        main()
     except:
+        logging.error("Terminated with error",exc_info=True)
         sys.exit(1)

@@ -10,11 +10,6 @@ import math
 from custommel import mel_spec
 import cv2
 
-fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
-
-logging.basicConfig(
-    stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
-)
 CALL_LENGTH = 1
 
 DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
@@ -327,6 +322,7 @@ def get_end(frames, sr):
 
 def classify(file, models, analyse_tracks, meta_data=None):
     frames, sr = load_recording(file)
+    raw_length = len(frames)/sr
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
     # want to use signals for chrips
@@ -401,7 +397,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             )
             data = mel_data
         if len(data) == 0:
-            return [], length, 0, []
+            return [], length, 0, [],raw_length
         for d, t in zip(data, tracks):
             predictions = model.predict(np.array(d), verbose=0)
             prediction = np.mean(predictions, axis=0)
@@ -455,7 +451,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             else:
                 i += 1
         last_end = t.end
-    return tracks, length, chirps, signals
+    return tracks, length, chirps, signals, raw_length
 
 
 def signal_noise(frames, sr, hop_length=281):
