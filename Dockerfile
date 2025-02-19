@@ -32,11 +32,10 @@ RUN gdown --fuzzy "https://drive.google.com/file/d/1vx_KARUfboUHn95JngZRFT_wFupv
 RUN tar xzvf bird-model.tar -C /models/bird-model --strip-components=1
 RUN rm bird-model.tar
 
-RUN mkdir /models/morepork-model -p
-
-RUN gdown --fuzzy "https://drive.google.com/file/d/1M3rb49f-yIWxCchZtX5QYhbN4tZ7qkD9/view?usp=sharing" -O morepork-model.tar
-RUN tar xzvf morepork-model.tar -C /models/morepork-model --strip-components=1
-RUN rm morepork-model.tar
+# RUN mkdir /models/morepork-model -p
+# RUN gdown --fuzzy "https://drive.google.com/file/d/1M3rb49f-yIWxCchZtX5QYhbN4tZ7qkD9/view?usp=sharing" -O morepork-model.tar
+# RUN tar xzvf morepork-model.tar -C /models/morepork-model --strip-components=1
+# RUN rm morepork-model.tar
 
 COPY Melt /Melt
 ENTRYPOINT ["python3","/Melt/chain.py"]
