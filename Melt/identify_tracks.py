@@ -61,6 +61,7 @@ def load_samples(
     db_scale=False,
     filter_freqs=True,
     filter_below=None,
+    normalize=False,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
@@ -111,6 +112,8 @@ def load_samples(
             data = track_frames[sr_start:sr_end]
             if len(data) != sample_size:
                 data = np.pad(data, (0, sample_size - len(data)))
+            if normalize:
+                data = normalize_data(data)
             spect = get_spect(
                 data,
                 sr,
@@ -139,6 +142,16 @@ def load_samples(
                 break
         mel_samples.append(track_data)
     return mel_samples
+
+
+def normalize_data(x):
+    min_v = np.min(x, -1, keepdims=True)
+    x = x - min_v
+    max_v = np.max(x, -1, keepdims=True)
+    x = x / max_v + 0.000001
+    x = x - 0.5
+    x =x * 2
+    return x
 
 
 def get_spect(
@@ -370,6 +383,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
+        normalize = meta.get("normalize",False)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
@@ -394,6 +408,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 db_scale=db_scale,
                 filter_freqs=filter_freqs,
                 filter_below=filter_below,
+                normalize=normalize
             )
             data = mel_data
         if len(data) == 0:
