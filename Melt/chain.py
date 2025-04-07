@@ -110,14 +110,13 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
             tracks, length, chirps, signals, raw_length = classify_res
-            labels.extend([track.get_meta() for track in tracks])
             cacophony_index, version = calc_cacophony_index(
                 filter_tracks(tracks), length
             )
-
             if meta_data is not None:
                 observed_species, region_code = species_by_location(meta_data)
-                if observed_species is not None: 
+                if region_code is not None: 
+                    logging.debug("Matching to region code %s species list %s",region_code,observed_species)
                     for track in tracks:
                         for prediction in track.predictions:
                             if len(prediction.ebird_ids)==0:
@@ -130,6 +129,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                     t_labels.append(label)
                                     ebird_ids.append(pred_ebird_ids)
                                 else:
+                                    logging.debug("Region filtering %s",label)
                                     prediction.filtered_labels.append((label,pred_ebird_ids))
                                     
                             prediction.labels = t_labels
@@ -171,8 +171,9 @@ def species_by_location(rec_metadata):
     if location_data is None:
         region_code = "NZ"
         logging.info("No location data assume nz species")
-        for species_info in species_file.items():
-            species_list.update(species_info["species"])
+        for species_info in species_data.values():
+            if species_info["region"]["info"]["parent"]["code"]==region_code:
+                species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
         lat = location_data.get("lat")

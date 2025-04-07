@@ -258,7 +258,7 @@ def load_model(model_path):
             str(model_path),
             # compile=False,
         )
-        # model.load_weights(model_path / "val_binary_accuracy").expect_partial()
+        
         if model_path.is_file():
             meta_file = model_path.parent / "metadata.txt"
         else:
