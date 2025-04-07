@@ -99,6 +99,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     result = {}
     meta_file = Path(file_name).with_suffix(".txt")
     meta_data = None
+    region_code = None
     if meta_file.exists():
         with meta_file.open("r") as f:
             meta_data = json.load(f)
