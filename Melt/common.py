@@ -214,4 +214,4 @@ def execute(command):
 
 
 def jsdump(source):
-    return json.dumps(source, sort_keys=True, indent=4, separators=(",", ": "))
+    return json.dumps(source, sort_keys=True, indent=4)

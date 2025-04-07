@@ -10,11 +10,6 @@ import math
 from custommel import mel_spec
 import cv2
 
-fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
-
-logging.basicConfig(
-    stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
-)
 CALL_LENGTH = 1
 
 DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
@@ -83,6 +78,7 @@ def load_samples(
     db_scale=False,
     filter_freqs=True,
     filter_below=None,
+    normalize=False,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
@@ -133,6 +129,8 @@ def load_samples(
             data = track_frames[sr_start:sr_end]
             if len(data) != sample_size:
                 data = np.pad(data, (0, sample_size - len(data)))
+            if normalize:
+                data = normalize_data(data)
             spect = get_spect(
                 data,
                 sr,
@@ -161,6 +159,16 @@ def load_samples(
                 break
         mel_samples.append(track_data)
     return mel_samples
+
+
+def normalize_data(x):
+    min_v = np.min(x, -1, keepdims=True)
+    x = x - min_v
+    max_v = np.max(x, -1, keepdims=True)
+    x = x / max_v + 0.000001
+    x = x - 0.5
+    x =x * 2
+    return x
 
 
 def get_spect(
@@ -351,6 +359,7 @@ def get_end(frames, sr):
 
 def classify(file, models, analyse_tracks, meta_data=None):
     frames, sr = load_recording(file)
+    raw_length = len(frames) / sr
     length = get_end(frames, sr)
     signals = signal_noise(frames[: int(sr * length)], sr, 281)
     # want to use signals for chrips
@@ -399,6 +408,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
+        normalize = meta.get("normalize",False)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
@@ -421,10 +431,11 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 db_scale=db_scale,
                 filter_freqs=filter_freqs,
                 filter_below=filter_below,
+                normalize=normalize
             )
             data = mel_data
         if len(data) == 0:
-            return [], length, 0, []
+            return [], length, 0, [], raw_length
         for d, t in zip(data, tracks):
             predictions = model.predict(np.array(d), verbose=0)
             prediction = np.mean(predictions, axis=0)
@@ -482,7 +493,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             else:
                 i += 1
         last_end = t.end
-    return tracks, length, chirps, signals
+    return tracks, length, chirps, signals, raw_length
 
 
 def signal_noise(frames, sr, hop_length=281):
