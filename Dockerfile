@@ -1,5 +1,8 @@
 FROM tensorflow/tensorflow:2.19.0
 
+ARG MODEL_VERSION="0.1"
+
+
 RUN apt-get update && apt-get install ffmpeg -y
 
 RUN apt-get update && \
@@ -24,20 +27,9 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 WORKDIR /
 RUN rm -rf /tmp/workdir
-
-RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v0.1/badWinnerTui.tar"
-RUN tar xzvf badWinnerTui.tar -C /models/bird-model --strip-components=1
-# RUN pip install gdown
-# RUN mkdir /models/bird-model -p
-# RUN gdown --fuzzy "https://drive.google.com/file/d/1vx_KARUfboUHn95JngZRFT_wFupvCabj/view?usp=sharing" -O bird-model.tar
-# RUN tar xzvf bird-model.tar -C /models/bird-model --strip-components=1
-# RUN rm bird-model.tar
-
-# RUN mkdir /models/morepork-model -p
-
-# RUN gdown --fuzzy "https://drive.google.com/file/d/1M3rb49f-yIWxCchZtX5QYhbN4tZ7qkD9/view?usp=sharing" -O morepork-model.tar
-# RUN tar xzvf morepork-model.tar -C /models/morepork-model --strip-components=1
-# RUN rm morepork-model.tar
+RUN mkdir /models/bird-model -p
+RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/audiomodel.tar"
+RUN tar xzvf audiomodel.tar -C /models/bird-model --strip-components=1
 
 COPY Melt /Melt
 ENTRYPOINT ["python3","/Melt/chain.py"]

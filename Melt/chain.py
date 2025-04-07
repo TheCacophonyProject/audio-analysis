@@ -158,7 +158,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     return result
 
 def species_by_location(rec_metadata):
-    species_file = Path("ebird_species.json")
+    species_file = Path("/Melt/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f) 
@@ -172,7 +172,9 @@ def species_by_location(rec_metadata):
         region_code = "NZ"
         logging.info("No location data assume nz species")
         for species_info in species_data.values():
-            if species_info["region"]["info"]["parent"]["code"]==region_code:
+            region_info= species_info["region"]["info"]
+            parent_info = region_info.get("parent")
+            if (region_info["type"]=="country" and region_info["code"]== region_code) or (parent_info is not None and parent_info["code"]==region_code):
                 species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
@@ -250,7 +252,7 @@ def parse_args():
 
     args = parser.parse_args()
     if args.bird_model is None or len(args.bird_model) == 0:
-        args.bird_model = ["/models/bird-model"]
+        args.bird_model = ["/models/bird-model/audioModel.keras"]
 
     return args
 
