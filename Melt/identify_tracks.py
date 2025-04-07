@@ -19,6 +19,7 @@ DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
 SIGNAL_WIDTH = 0.25
 MAX_FRQUENCY = 48000 / 2
 
+
 # tensorflow refuces to load without this
 @tf.keras.utils.register_keras_serializable(package="MyLayers", name="MagTransform")
 class MagTransform(tf.keras.layers.Layer):
@@ -167,7 +168,7 @@ def normalize_data(x):
     max_v = np.max(x, -1, keepdims=True)
     x = x / max_v + 0.000001
     x = x - 0.5
-    x =x * 2
+    x = x * 2
     return x
 
 
@@ -258,7 +259,7 @@ def load_model(model_path):
             str(model_path),
             # compile=False,
         )
-        
+
         if model_path.is_file():
             meta_file = model_path.parent / "metadata.txt"
         else:
@@ -267,7 +268,7 @@ def load_model(model_path):
         with open(meta_file, "r") as f:
             meta = json.load(f)
     except:
-        logging.info("Could not load model" , exc_info=True)
+        logging.info("Could not load model", exc_info=True)
     return model, meta
 
 
@@ -387,7 +388,6 @@ def classify(file, models, analyse_tracks, meta_data=None):
         filter_freqs = meta.get("filter_freq", True)
         filter_below = meta.get("filter_below", 1000)
 
-
         ebird_ids = meta.get("ebird_ids")
         labels = meta.get("labels")
         multi_label = meta.get("multi_label")
@@ -408,7 +408,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
-        normalize = meta.get("normalize",False)
+        normalize = meta.get("normalize", False)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
@@ -431,7 +431,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 db_scale=db_scale,
                 filter_freqs=filter_freqs,
                 filter_below=filter_below,
-                normalize=normalize
+                normalize=normalize,
             )
             data = mel_data
         if len(data) == 0:

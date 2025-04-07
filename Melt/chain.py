@@ -16,6 +16,7 @@ from pathlib import Path
 import argparse
 import json
 import logging
+
 NON_BIRD = ["human", "noise", "insect"]
 
 
@@ -115,23 +116,38 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
             )
             if meta_data is not None:
                 observed_species, region_code = species_by_location(meta_data)
-                if region_code is not None: 
-                    logging.debug("Matching to region code %s species list %s",region_code,observed_species)
+                if region_code is not None:
+                    logging.debug(
+                        "Matching to region code %s species list %s",
+                        region_code,
+                        observed_species,
+                    )
                     for track in tracks:
                         for prediction in track.predictions:
-                            if len(prediction.ebird_ids)==0:
+                            if len(prediction.ebird_ids) == 0:
                                 continue
                             t_labels = []
                             ebird_ids = []
-                            for label,pred_ebird_ids in zip(prediction.labels,prediction.ebird_ids):
-                                found = len(pred_ebird_ids)==0 or next((True for track_ebird in pred_ebird_ids if track_ebird in  observed_species),False)
+                            for label, pred_ebird_ids in zip(
+                                prediction.labels, prediction.ebird_ids
+                            ):
+                                found = len(pred_ebird_ids) == 0 or next(
+                                    (
+                                        True
+                                        for track_ebird in pred_ebird_ids
+                                        if track_ebird in observed_species
+                                    ),
+                                    False,
+                                )
                                 if found:
                                     t_labels.append(label)
                                     ebird_ids.append(pred_ebird_ids)
                                 else:
-                                    logging.debug("Region filtering %s",label)
-                                    prediction.filtered_labels.append((label,pred_ebird_ids))
-                                    
+                                    logging.debug("Region filtering %s", label)
+                                    prediction.filtered_labels.append(
+                                        (label, pred_ebird_ids)
+                                    )
+
                             prediction.labels = t_labels
                             prediction.ebird_ids = ebird_ids
             labels.extend([track.get_meta() for track in tracks])
@@ -141,7 +157,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                 version = "2.0"
                 chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
                 if region_code is not None:
-                    result["region_code"]= region_code
+                    result["region_code"] = region_code
                 result["duration"] = raw_length
                 result["cacophony_index"] = cacophony_index
                 result["cacophony_index_version"] = version
@@ -152,19 +168,19 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                     "signals": [s.to_array() for s in signals],
                 }
 
-
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
+
 
 def species_by_location(rec_metadata):
     species_file = Path("/Melt/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
-            species_data = json.load(f) 
+            species_data = json.load(f)
     else:
         logging.info("No species file")
-        return None,None
+        return None, None
     location_data = rec_metadata.get("location")
     species_list = set()
     region_code = None
@@ -172,31 +188,41 @@ def species_by_location(rec_metadata):
         region_code = "NZ"
         logging.info("No location data assume nz species")
         for species_info in species_data.values():
-            region_info= species_info["region"]["info"]
+            region_info = species_info["region"]["info"]
             parent_info = region_info.get("parent")
-            if (region_info["type"]=="country" and region_info["code"]== region_code) or (parent_info is not None and parent_info["code"]==region_code):
+            if (
+                region_info["type"] == "country" and region_info["code"] == region_code
+            ) or (parent_info is not None and parent_info["code"] == region_code):
                 species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
         lat = location_data.get("lat")
         lng = location_data.get("lng")
-            # "lat": -36.997142,
-            # "lng": 174.57328
+        # "lat": -36.997142,
+        # "lng": 174.57328
 
         # match lat lng
         for code, species_info in species_data.items():
             region_bounds = species_info["region"]["info"]["bounds"]
-            if lng >= region_bounds["minX"] and lng <= region_bounds["maxX"] and lat>= region_bounds["minY"] and lat <= region_bounds["maxY"]:
+            if (
+                lng >= region_bounds["minX"]
+                and lng <= region_bounds["maxX"]
+                and lat >= region_bounds["minY"]
+                and lat <= region_bounds["maxY"]
+            ):
                 species_list = species_info["species"]
                 region_code = code
-                logging.info("Match lat %s lng %s to region %s ",lat,lng,species_info)
-                break    
+                logging.info(
+                    "Match lat %s lng %s to region %s ", lat, lng, species_info
+                )
+                break
 
-                    #         "minX": 174.160829,
-                    # "maxX": 175.551667,
-                    # "minY": -37.380549,
-                    # "maxY": -35.899166
-    return species_list,region_code
+                #         "minX": 174.160829,
+                # "maxX": 175.551667,
+                # "minY": -37.380549,
+                # "maxY": -35.899166
+    return species_list, region_code
+
 
 def examine(file_name, morepork_model, bird_model, analyse_tracks=False):
     import cacophony_index
