@@ -370,10 +370,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
         meta_tracks = [t for t in meta_data["Tracks"]]
         tracks = []
         for t in meta_tracks:
-            pos = t["positions"][0]
-            freq_start = pos["y"] * MAX_FRQUENCY
-            freq_end = pos["height"] * MAX_FRQUENCY + freq_start
-
+            freq_start = t.get("minFreq", 0)
+            freq_end = t.get("maxFreq", MAX_FRQUENCY)
             # add to signals also???
             signal = Signal(t["start"], t["end"], freq_start, freq_end)
             signal.track_id = t["id"]
