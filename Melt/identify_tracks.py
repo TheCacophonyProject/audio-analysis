@@ -79,7 +79,7 @@ def load_samples(
     db_scale=False,
     filter_freqs=True,
     filter_below=None,
-    normalize=False,
+    normalize=True,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
@@ -395,7 +395,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         mean_sub = meta.get("mean_sub", False)
         model_name = meta.get("name", False)
         use_mfcc = meta.get("use_mfcc", False)
-        n_mels = meta.get("n_mels", 80)
+        n_mels = meta.get("n_mels", 160)
         mel_break = meta.get("break_freq", 1750)
         htk = meta.get("htk", False)
         fmin = meta.get("fmin", 50)
@@ -406,7 +406,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
-        normalize = meta.get("normalize", False)
+        normalize = meta.get("normalize", True)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
