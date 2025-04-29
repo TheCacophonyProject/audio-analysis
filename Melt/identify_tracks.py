@@ -257,7 +257,6 @@ def load_model(model_path):
         logging.info("Loading %s", str(model_path))
         model = tf.keras.models.load_model(
             str(model_path),
-            # compile=False,
         )
 
         if model_path.is_file():
@@ -267,8 +266,9 @@ def load_model(model_path):
 
         with open(meta_file, "r") as f:
             meta = json.load(f)
-    except:
+    except Exception as e:
         logging.info("Could not load model", exc_info=True)
+        raise e
     return model, meta
 
 
@@ -533,8 +533,8 @@ def signal_noise(frames, sr, hop_length=281):
     components, small_mask, stats, _ = cv2.connectedComponentsWithStats(signal)
     stats = stats[1:]
     stats = sorted(stats, key=lambda stat: stat[0])
-    min_width =  0.65 * width
-    min_height =  height - height // 10
+    min_width = 0.65 * width
+    min_height = height - height // 10
     stats = [s for s in stats if s[2] > min_width and s[3] > min_height]
 
     i = 0
@@ -588,7 +588,7 @@ def merge_signals(signals):
             if u == s:
                 continue
             in_freq = u.mel_freq_end < 1500 and s.mel_freq_end < 1500
-            in_freq = in_freq or u.mel_freq_start > 1500 and s.mel_freq_start > 1500
+            in_freq = in_freq or u.mel_freq_end > 1500 and s.mel_freq_end > 1500
             # ensure both are either below 1500 or abov
             if not in_freq:
                 continue
@@ -663,14 +663,14 @@ def get_tracks_from_signals(signals, end):
             if s == s2:
                 continue
 
-
             overlap = s.time_overlap(s2)
             mel_overlap = s.freq_overlap(s2)
-            min_length = min(s.length,s2.length)
-            if  overlap > 0.5*min_length and abs(mel_overlap) < 1500:
+            min_length = min(s.length, s2.length)
+            # 2200 chosen on testing some files may be too leniant
+            if overlap > 0.7 * min_length and abs(mel_overlap) < 2200:
                 s.merge(s2)
                 to_delete.append(s2)
-           
+
     for s in to_delete:
         signals.remove(s)
     to_delete = []
