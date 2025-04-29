@@ -100,6 +100,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     result = {}
     meta_file = Path(file_name).with_suffix(".txt")
     meta_data = None
+    region_code = None
     if meta_file.exists():
         with meta_file.open("r") as f:
             meta_data = json.load(f)
@@ -109,15 +110,54 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     if bird_models is not None:
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
-            bird_ids, length, chirps, signals, raw_length = classify_res
-            labels.extend([track.get_meta() for track in bird_ids])
+            tracks, length, chirps, signals, raw_length = classify_res
             cacophony_index, version = calc_cacophony_index(
-                filter_tracks(bird_ids), length
+                filter_tracks(tracks), length
             )
+            if meta_data is not None:
+                observed_species, region_code = species_by_location(meta_data)
+                if region_code is not None:
+                    logging.debug(
+                        "Matching to region code %s species list %s",
+                        region_code,
+                        observed_species,
+                    )
+                    for track in tracks:
+                        for prediction in track.predictions:
+                            if len(prediction.ebird_ids) == 0:
+                                continue
+                            t_labels = []
+                            ebird_ids = []
+                            for label, pred_ebird_ids in zip(
+                                prediction.labels, prediction.ebird_ids
+                            ):
+                                found = len(pred_ebird_ids) == 0 or next(
+                                    (
+                                        True
+                                        for track_ebird in pred_ebird_ids
+                                        if track_ebird in observed_species
+                                    ),
+                                    False,
+                                )
+                                if found:
+                                    t_labels.append(label)
+                                    ebird_ids.append(pred_ebird_ids)
+                                else:
+                                    logging.debug("Region filtering %s", label)
+                                    prediction.filtered_labels.append(
+                                        (label, pred_ebird_ids)
+                                    )
+
+                            prediction.labels = t_labels
+                            prediction.ebird_ids = ebird_ids
+            labels.extend([track.get_meta() for track in tracks])
+
             if not analyse_tracks:
                 max_chirps = get_max_chirps(length)
                 version = "2.0"
                 chirp_index = 0 if max_chirps == 0 else round(100 * chirps / max_chirps)
+                if region_code is not None:
+                    result["region_code"] = region_code
                 result["duration"] = raw_length
                 result["cacophony_index"] = cacophony_index
                 result["cacophony_index_version"] = version
@@ -131,6 +171,57 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
+
+
+def species_by_location(rec_metadata):
+    species_file = Path("/Melt/ebird_species.json")
+    if species_file.exists():
+        with species_file.open("r") as f:
+            species_data = json.load(f)
+    else:
+        logging.info("No species file")
+        return None, None
+    location_data = rec_metadata.get("location")
+    species_list = set()
+    region_code = None
+    if location_data is None:
+        region_code = "NZ"
+        logging.info("No location data assume nz species")
+        for species_info in species_data.values():
+            region_info = species_info["region"]["info"]
+            parent_info = region_info.get("parent")
+            if (
+                region_info["type"] == "country" and region_info["code"] == region_code
+            ) or (parent_info is not None and parent_info["code"] == region_code):
+                species_list.update(species_info["species"])
+        species_list = list(species_list)
+    else:
+        lat = location_data.get("lat")
+        lng = location_data.get("lng")
+        # "lat": -36.997142,
+        # "lng": 174.57328
+
+        # match lat lng
+        for code, species_info in species_data.items():
+            region_bounds = species_info["region"]["info"]["bounds"]
+            if (
+                lng >= region_bounds["minX"]
+                and lng <= region_bounds["maxX"]
+                and lat >= region_bounds["minY"]
+                and lat <= region_bounds["maxY"]
+            ):
+                species_list = species_info["species"]
+                region_code = code
+                logging.info(
+                    "Match lat %s lng %s to region %s ", lat, lng, species_info
+                )
+                break
+
+                #         "minX": 174.160829,
+                # "maxX": 175.551667,
+                # "minY": -37.380549,
+                # "maxY": -35.899166
+    return species_list, region_code
 
 
 def examine(file_name, morepork_model, bird_model, analyse_tracks=False):
@@ -187,7 +278,7 @@ def parse_args():
 
     args = parser.parse_args()
     if args.bird_model is None or len(args.bird_model) == 0:
-        args.bird_model = ["/models/bird-model"]
+        args.bird_model = ["/models/bird-model/audioModel.keras"]
 
     return args
 
