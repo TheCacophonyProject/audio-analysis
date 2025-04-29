@@ -1,6 +1,6 @@
 FROM tensorflow/tensorflow:2.19.0
 
-ARG MODEL_VERSION="0.1"
+ARG MODEL_VERSION="0.3"
 
 
 RUN apt-get update && apt-get install ffmpeg -y

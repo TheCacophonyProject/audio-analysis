@@ -16,7 +16,7 @@ DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
 
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
-SIGNAL_WIDTH = 0.5
+SIGNAL_WIDTH = 0.25
 MAX_FRQUENCY = 48000 / 2
 
 
