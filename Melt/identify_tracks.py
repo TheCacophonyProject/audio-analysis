@@ -417,6 +417,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         prob_thresh = meta.get("threshold", 0.7)
         bird_thresh = meta.get("bird_thresh", 0.5)
         n_fft = meta.get("n_fft", 4096)
+
         if n_fft is None:
             n_fft = 4096
         normalize = meta.get("normalize", True)
@@ -456,9 +457,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             if "efficientnet" in model_name.lower():
                 d = np.repeat(d, 3, -1)
             predictions = model.predict(np.array(d), verbose=0)
-            logging.info(
-                "Predictions for %s is %s ", t.start, np.round(100 * predictions)
-            )
+
             prediction = np.mean(predictions, axis=0)
             max_p = None
             result = ModelResult(model_name)
@@ -467,17 +466,10 @@ def classify(file, models, analyse_tracks, meta_data=None):
             if not multi_label and "bird" not in labels:
                 for p in predictions:
                     max_i = np.argmax(p)
-                    logging.info(
-                        "Pred result %s %s is bird? %s",
-                        labels[max_i],
-                        p[max_i],
-                        bird_indexes[max_i],
-                    )
                     if bird_indexes[max_i]:
                         bird_prob += p[max_i]
                 if len(predictions) > 0:
                     bird_prob = bird_prob / len(predictions)
-                    logging.info("Bird prob is %s", bird_prob)
                 if bird_prob > bird_thresh:
                     result.labels.append("bird")
                     if ebird_ids is not None:
