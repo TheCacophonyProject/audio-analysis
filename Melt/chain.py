@@ -126,8 +126,11 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 continue
                             t_labels = []
                             ebird_ids = []
+                            labels = prediction.labels
+                            if prediction.raw_tag is not None:
+                                labels = [prediction.raw_tag]
                             for label, pred_ebird_ids in zip(
-                                prediction.labels, prediction.ebird_ids
+                                labels, prediction.ebird_ids
                             ):
                                 found = len(pred_ebird_ids) == 0 or next(
                                     (
@@ -145,9 +148,14 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                     prediction.filtered_labels.append(
                                         (label, pred_ebird_ids)
                                     )
-
-                            prediction.labels = t_labels
-                            prediction.ebird_ids = ebird_ids
+                            if prediction.raw_tag is not None:
+                                prediction.raw_tag = (
+                                    t_labels[0] if len(t_labels) > 0 else None
+                                )
+                                prediction.ebird_ids = ebird_ids
+                            else:
+                                prediction.labels = t_labels
+                                prediction.ebird_ids = ebird_ids
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:
@@ -165,14 +173,14 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                     "chirp_index": chirp_index,
                     "signals": [s.to_array() for s in signals],
                 }
-
+    result["non_bird_tags"] = NON_BIRD
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
 def species_by_location(rec_metadata):
-    species_file = Path("/Melt/ebird_species.json")
+    species_file = Path("./Melt/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f)
