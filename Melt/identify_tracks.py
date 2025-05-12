@@ -79,7 +79,7 @@ def load_samples(
     db_scale=False,
     filter_freqs=True,
     filter_below=None,
-    normalize=False,
+    normalize=True,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
@@ -257,7 +257,6 @@ def load_model(model_path):
         logging.info("Loading %s", str(model_path))
         model = tf.keras.models.load_model(
             str(model_path),
-            # compile=False,
         )
 
         if model_path.is_file():
@@ -267,8 +266,9 @@ def load_model(model_path):
 
         with open(meta_file, "r") as f:
             meta = json.load(f)
-    except:
+    except Exception as e:
         logging.info("Could not load model", exc_info=True)
+        raise e
     return model, meta
 
 
@@ -395,7 +395,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         mean_sub = meta.get("mean_sub", False)
         model_name = meta.get("name", False)
         use_mfcc = meta.get("use_mfcc", False)
-        n_mels = meta.get("n_mels", 80)
+        n_mels = meta.get("n_mels", 160)
         mel_break = meta.get("break_freq", 1750)
         htk = meta.get("htk", False)
         fmin = meta.get("fmin", 50)
@@ -406,7 +406,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
-        normalize = meta.get("normalize", False)
+        normalize = meta.get("normalize", True)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
@@ -496,7 +496,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
 def signal_noise(frames, sr, hop_length=281):
     # frames = frames[:sr]
-    n_fft = sr // 10
+    n_fft = 4096
     # frames = frames[: sr * 3]
     spectogram = np.abs(librosa.stft(frames, n_fft=n_fft, hop_length=hop_length))
 
@@ -517,9 +517,6 @@ def signal_noise(frames, sr, hop_length=281):
     kernel = np.ones((4, 4), np.uint8)
     signal = cv2.morphologyEx(signal, cv2.MORPH_OPEN, kernel)
 
-    min_width = 0.1
-    min_width = min_width * sr / hop_length
-    min_width = int(min_width)
     width = SIGNAL_WIDTH * sr / hop_length
     width = int(width)
     freq_range = 100
@@ -536,7 +533,9 @@ def signal_noise(frames, sr, hop_length=281):
     components, small_mask, stats, _ = cv2.connectedComponentsWithStats(signal)
     stats = stats[1:]
     stats = sorted(stats, key=lambda stat: stat[0])
-    stats = [s for s in stats if s[2] > min_width]
+    min_width = 0.65 * width
+    min_height = height - height // 10
+    stats = [s for s in stats if s[2] > min_width and s[3] > min_height]
 
     i = 0
     # indicator_vector = np.uint8(indicator_vector)
@@ -589,7 +588,7 @@ def merge_signals(signals):
             if u == s:
                 continue
             in_freq = u.mel_freq_end < 1500 and s.mel_freq_end < 1500
-            in_freq = in_freq or u.mel_freq_start > 1500 and s.mel_freq_start > 1500
+            in_freq = in_freq or u.mel_freq_end > 1500 and s.mel_freq_end > 1500
             # ensure both are either below 1500 or abov
             if not in_freq:
                 continue
@@ -658,26 +657,26 @@ def get_tracks_from_signals(signals, end):
         if s.length < min_length:
             to_delete.append(s)
             continue
-        s.enlarge(1.4, min_track_length=min_track_length)
-
-        s.end = min(end, s.end)
         for s2 in signals:
             if s2 in to_delete:
                 continue
             if s == s2:
                 continue
+
             overlap = s.time_overlap(s2)
-            engulfed = overlap >= 0.9 * s2.length
-            f_overlap = s.mel_freq_overlap(s2)
-            range = s2.mel_freq_range
-            range *= 0.7
-            if f_overlap > range and engulfed:
+            mel_overlap = s.freq_overlap(s2)
+            min_length = min(s.length, s2.length)
+            # 2200 chosen on testing some files may be too leniant
+            if overlap > 0.7 * min_length and abs(mel_overlap) < 2200:
+                s.merge(s2)
                 to_delete.append(s2)
 
     for s in to_delete:
         signals.remove(s)
     to_delete = []
     for s in signals:
+        s.enlarge(1.4, min_track_length=min_track_length)
+        s.end = min(end, s.end)
         if s.mel_freq_range < min_mel_range:
             to_delete.append(s)
     for s in to_delete:
@@ -755,10 +754,10 @@ class Signal:
             (other.mel_freq_start, other.mel_freq_end),
         )
 
-    def freq_overlap(s, s2):
+    def freq_overlap(self, other):
         return segment_overlap(
-            (self.mel_freq_start, self.mel_freq_end),
-            (other.mel_freq_start, other.mel_freq_end),
+            (self.freq_start, self.freq_end),
+            (other.freq_start, other.freq_end),
         )
 
     @property
