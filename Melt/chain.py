@@ -10,14 +10,12 @@ import time
 
 import common
 from identify_morepork import identify_morepork
-from identify_tracks import classify, get_max_chirps
+from identify_tracks import classify, get_max_chirps, NON_BIRD
 import math
 from pathlib import Path
 import argparse
 import json
 import logging
-
-NON_BIRD = ["human", "noise", "insect"]
 
 
 def calc_cacophony_index(tracks, length):

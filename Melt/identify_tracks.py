@@ -13,6 +13,7 @@ import cv2
 CALL_LENGTH = 1
 
 DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
+NON_BIRD = ["human", "noise", "insect"]
 
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
@@ -80,9 +81,10 @@ def load_samples(
     filter_freqs=True,
     filter_below=None,
     normalize=True,
+    n_fft=4096,
 ):
     logging.debug(
-        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s",
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s n_fft %s",
         segment_length,
         stride,
         hop_length,
@@ -95,10 +97,10 @@ def load_samples(
         fmax,
         filter_freqs,
         filter_below,
+        n_fft,
     )
     mels = []
     i = 0
-    n_fft = sr // 10
     # hop_length = 640  # feature frame rate of 75
 
     sample_size = int(sr * segment_length)
@@ -220,8 +222,8 @@ def get_spect(
             n_fft,
             hop_length,
             n_mels,
-            fmin,
-            fmax,
+            50 if fmin is None else fmin,
+            11000 if fmin is None else fmax,
             mel_break,
             power=power,
         )
@@ -253,12 +255,6 @@ def get_spect(
 
 def load_model(model_path):
     try:
-        model_path = Path(model_path)
-        logging.info("Loading %s", str(model_path))
-        model = tf.keras.models.load_model(
-            str(model_path),
-        )
-
         if model_path.is_file():
             meta_file = model_path.parent / "metadata.txt"
         else:
@@ -266,6 +262,19 @@ def load_model(model_path):
 
         with open(meta_file, "r") as f:
             meta = json.load(f)
+
+        # tensorflow being difficult about custom layers
+        if meta.get("magv2", False):
+            from magtransformv2 import MagTransform
+        else:
+            from magtransform import MagTransform
+
+        model_path = Path(model_path)
+        logging.info("Loading %s", str(model_path))
+        model = tf.keras.models.load_model(
+            str(model_path),
+        )
+
     except Exception as e:
         logging.info("Could not load model", exc_info=True)
         raise e
@@ -382,7 +391,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         tracks = get_tracks_from_signals(tracks, length)
     mel_data = None
     for model_file in models:
-        model, meta = load_model(model_file)
+        model, meta = load_model(Path(model_file))
         filter_freqs = meta.get("filter_freq", True)
         filter_below = meta.get("filter_below", 1000)
 
@@ -406,6 +415,10 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
+        bird_thresh = meta.get("bird_thresh", 0.5)
+        n_fft = meta.get("n_fft", 4096)
+        if n_fft is None:
+            n_fft = 4096
         normalize = meta.get("normalize", True)
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
@@ -430,16 +443,47 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 filter_freqs=filter_freqs,
                 filter_below=filter_below,
                 normalize=normalize,
+                n_fft=n_fft,
             )
             data = mel_data
         if len(data) == 0:
             return [], length, 0, [], raw_length
+
+        bird_indexes = []
+        for i, l in enumerate(labels):
+            bird_indexes.append(l not in NON_BIRD)
         for d, t in zip(data, tracks):
+            if "efficientnet" in model_name.lower():
+                d = np.repeat(d, 3, -1)
             predictions = model.predict(np.array(d), verbose=0)
+            logging.info(
+                "Predictions for %s is %s ", t.start, np.round(100 * predictions)
+            )
             prediction = np.mean(predictions, axis=0)
             max_p = None
             result = ModelResult(model_name)
             t.predictions.append(result)
+            bird_prob = 0
+            if not multi_label and "bird" not in labels:
+                for p in predictions:
+                    max_i = np.argmax(p)
+                    logging.info(
+                        "Pred result %s %s is bird? %s",
+                        labels[max_i],
+                        p[max_i],
+                        bird_indexes[max_i],
+                    )
+                    if bird_indexes[max_i]:
+                        bird_prob += p[max_i]
+                if len(predictions) > 0:
+                    bird_prob = bird_prob / len(predictions)
+                    logging.info("Bird prob is %s", bird_prob)
+                if bird_prob > bird_thresh:
+                    result.labels.append("bird")
+                    if ebird_ids is not None:
+                        result.ebird_ids.append([])
+                    result.confidences.append(round(bird_prob * 100))
+
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
                     max_p = (i, p)
