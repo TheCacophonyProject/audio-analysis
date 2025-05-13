@@ -126,11 +126,14 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 continue
                             t_labels = []
                             ebird_ids = []
+                            t_confidences = []
                             p_labels = prediction.labels
+                            p_confidences = prediction.confidences
                             if prediction.raw_tag is not None:
                                 p_labels = [prediction.raw_tag]
-                            for label, pred_ebird_ids in zip(
-                                p_labels, prediction.ebird_ids
+                                p_confidences = [prediction.raw_confidence]
+                            for label, pred_ebird_ids, confidence in zip(
+                                p_labels, prediction.ebird_ids, p_confidences
                             ):
                                 found = len(pred_ebird_ids) == 0 or next(
                                     (
@@ -143,19 +146,25 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 if found:
                                     t_labels.append(label)
                                     ebird_ids.append(pred_ebird_ids)
+                                    t_confidences.append(confidence)
                                 else:
                                     logging.debug("Region filtering %s", label)
                                     prediction.filtered_labels.append(
-                                        (label, pred_ebird_ids)
+                                        (label, pred_ebird_ids, confidence)
                                     )
                             if prediction.raw_tag is not None:
                                 prediction.raw_tag = (
                                     t_labels[0] if len(t_labels) > 0 else None
                                 )
                                 prediction.ebird_ids = ebird_ids
+                                prediction.raw_confidence = (
+                                    t_confidences[0] if len(t_confidences) > 0 else None
+                                )
                             else:
                                 prediction.labels = t_labels
                                 prediction.ebird_ids = ebird_ids
+                                prediction.confidences = t_confidences
+
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:
