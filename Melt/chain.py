@@ -164,7 +164,21 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 prediction.labels = t_labels
                                 prediction.ebird_ids = ebird_ids
                                 prediction.confidences = t_confidences
-
+                            if len(prediction.filtered_labels) > 0:
+                                if "bird" not in prediction.labels:
+                                    logging.info(
+                                        "Adding bird as specific bird labels were filtered"
+                                    )
+                                    prediction.labels.append("bird")
+                                    prediction.ebird_ids.append([])
+                                    prediction.confidences.append(
+                                        max(
+                                            [
+                                                filtered[2]
+                                                for filtered in prediction.filtered_labels
+                                            ]
+                                        )
+                                    )
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:

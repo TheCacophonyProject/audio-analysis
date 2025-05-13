@@ -720,6 +720,7 @@ def get_tracks_from_signals(signals, end):
     return signals
 
 
+# TODO predictions should be moved into there own structure
 class ModelResult:
     def __init__(self, model):
         self.model = model
