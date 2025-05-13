@@ -126,11 +126,11 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 continue
                             t_labels = []
                             ebird_ids = []
-                            labels = prediction.labels
+                            p_labels = prediction.labels
                             if prediction.raw_tag is not None:
-                                labels = [prediction.raw_tag]
+                                p_labels = [prediction.raw_tag]
                             for label, pred_ebird_ids in zip(
-                                labels, prediction.ebird_ids
+                                p_labels, prediction.ebird_ids
                             ):
                                 found = len(pred_ebird_ids) == 0 or next(
                                     (
@@ -204,10 +204,6 @@ def species_by_location(rec_metadata):
     else:
         lat = location_data.get("lat")
         lng = location_data.get("lng")
-        # "lat": -36.997142,
-        # "lng": 174.57328
-
-        # match lat lng
         for code, species_info in species_data.items():
             region_bounds = species_info["region"]["info"]["bounds"]
             if (
