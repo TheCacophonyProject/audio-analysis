@@ -180,7 +180,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
 
 
 def species_by_location(rec_metadata):
-    species_file = Path("./Melt/ebird_species.json")
+    species_file = Path("./ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f)
