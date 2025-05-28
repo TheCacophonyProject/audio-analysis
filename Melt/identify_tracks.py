@@ -131,7 +131,10 @@ def load_samples(
         while True:
             data = track_frames[sr_start:sr_end]
             if len(data) != sample_size:
-                data = np.pad(data, (0, sample_size - len(data)))
+                extra_frames = sample_size - len(data)
+                offset = np.random.randint(0, extra_frames)
+                data = np.pad(data, (offset, extra_frames - offset))
+
             if normalize:
                 data = normalize_data(data)
             spect = get_spect(
