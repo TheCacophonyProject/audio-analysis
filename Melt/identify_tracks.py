@@ -82,9 +82,10 @@ def load_samples(
     filter_below=None,
     normalize=True,
     n_fft=4096,
+    pad_short_tracks=True,
 ):
     logging.debug(
-        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s n_fft %s",
+        "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s n_fft %s pad short tracks %s",
         segment_length,
         stride,
         hop_length,
@@ -98,6 +99,7 @@ def load_samples(
         filter_freqs,
         filter_below,
         n_fft,
+        pad_short_tracks,
     )
     mels = []
     i = 0
@@ -112,11 +114,36 @@ def load_samples(
         track_data = []
         start = 0
         end = start + segment_length
-        end = min(end, t.length)
 
-        sr_end = min(int(end * sr), sample_size)
+        sr_end = int(t.end * sr)
+        sr_start = int(sr * t.start)
+
+        if pad_short_tracks:
+            end = min(end, t.length)
+            track_frames = frames[sr_start:sr_end]
+        else:
+            missing = sample_size - (sr_end - sr_start)
+            if missing > 0:
+                offset = np.random.randint(0, missing)
+                sr_start = sr_start - offset
+
+                if sr_start <= 0:
+                    sr_start = 0
+                    sr_end = sr_start + sample_size
+                    sr_end = min(sr_end, len(frames))
+                else:
+                    end_offset = sr_end + missing - offset
+                    if end_offset > len(frames):
+                        end_offset = len(frames)
+                        sr_start = end_offset - sample_size
+                        sr_start = max(sr_start, 0)
+                    sr_end = end_offset
+                assert sr_end - sr_start == sample_size
+
+            track_frames = frames[sr_start:sr_end]
+
         sr_start = 0
-        track_frames = frames[int(t.start * sr) : int(t.end * sr)]
+        sr_end = min(sr_end, sample_size)
         if filter_freqs:
             track_frames = butter_bandpass_filter(
                 track_frames, t.freq_start, t.freq_end, sr
@@ -134,7 +161,6 @@ def load_samples(
                 extra_frames = sample_size - len(data)
                 offset = np.random.randint(0, extra_frames)
                 data = np.pad(data, (offset, extra_frames - offset))
-
             if normalize:
                 data = normalize_data(data)
             spect = get_spect(
@@ -163,6 +189,7 @@ def load_samples(
             # always take 1 sample
             if end > t.length:
                 break
+
         mel_samples.append(track_data)
     return mel_samples
 
@@ -408,6 +435,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
         model_name = meta.get("name", False)
         use_mfcc = meta.get("use_mfcc", False)
         n_mels = meta.get("n_mels", 160)
+
+        pad_short = meta.get("pad_short_tracks", True)
         mel_break = meta.get("break_freq", 1750)
         htk = meta.get("htk", False)
         fmin = meta.get("fmin", 50)
@@ -448,6 +477,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 filter_below=filter_below,
                 normalize=normalize,
                 n_fft=n_fft,
+                pad_short_tracks=pad_short,
             )
             data = mel_data
         if len(data) == 0:

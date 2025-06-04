@@ -202,8 +202,65 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     return result
 
 
+def find_square(squares, lng, lat):
+    high = len(squares)
+    low = 0
+    found = None
+    # squares in order of lng so can binary search
+    while high >= low:
+        mid = (high + low) // 2
+        square = squares[mid]
+        bounds = square["bounds"]
+        if bounds[0] <= lng and bounds[2] >= lng:
+            found = mid
+            break
+        if bounds[2] < lng:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    decrement = False
+    while True:
+        if mid < 0:
+            return None
+        if mid < len(squares):
+            square = squares[mid]
+            bounds = square["bounds"]
+        if mid > len(squares) or bounds[0] > lng:
+            if decrement:
+                return None
+            decrement = True
+            mid = found - 1
+            continue
+
+        if bounds[1] <= lat and bounds[3] >= lat:
+            return square
+            break
+        if decrement:
+            mid -= 1
+        else:
+            mid += 1
+
+
+def merge_neighbours(square, species_meta):
+    species_per_month = square["species_per_month"]
+    for neighbour in square["neighbours_i"]:
+        neighbour_species = species_meta[neighbour]["species_per_month"]
+        for species, month_data in neighbour_species.items():
+            if species not in species_per_month:
+                species_per_month[species] = month_data.copy()
+                continue
+            for (
+                m,
+                c,
+            ) in month_data.items():
+                species_per_month[species][m] += c
+    return species_per_month
+
+
 def species_by_location(rec_metadata):
-    species_file = Path("/Melt/ebird_species.json")
+
+    species_file = Path("./Melt/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f)
@@ -225,8 +282,22 @@ def species_by_location(rec_metadata):
                 species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
+        species_square_file = Path("./Melt/ebird_species_per_square.json")
         lat = location_data.get("lat")
         lng = location_data.get("lng")
+        if species_square_file.exists():
+            with species_square_file.open("r") as f:
+                species_square_data = json.load(f)
+
+            square = find_square(species_square_data, lng, lat)
+            if square is not None:
+                species_per_month = merge_neighbours(square, species_square_data)
+                species_list = list(species_per_month.keys())
+                region_code = square["region_code"]
+                # might decide to filter out rare observations i.e. 1% or lower
+                logging.info("Found species list of %s", species_list)
+                return species_list, region_code
+
         for code, species_info in species_data.items():
             region_bounds = species_info["region"]["info"]["bounds"]
             if (
@@ -241,11 +312,6 @@ def species_by_location(rec_metadata):
                     "Match lat %s lng %s to region %s ", lat, lng, species_info
                 )
                 break
-
-                #         "minX": 174.160829,
-                # "maxX": 175.551667,
-                # "minY": -37.380549,
-                # "maxY": -35.899166
     return species_list, region_code
 
 
