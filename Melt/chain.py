@@ -10,14 +10,12 @@ import time
 
 import common
 from identify_morepork import identify_morepork
-from identify_tracks import classify, get_max_chirps
+from identify_tracks import classify, get_max_chirps, NON_BIRD
 import math
 from pathlib import Path
 import argparse
 import json
 import logging
-
-NON_BIRD = ["human", "noise", "insect"]
 
 
 def calc_cacophony_index(tracks, length):
@@ -128,8 +126,14 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 continue
                             t_labels = []
                             ebird_ids = []
-                            for label, pred_ebird_ids in zip(
-                                prediction.labels, prediction.ebird_ids
+                            t_confidences = []
+                            p_labels = prediction.labels
+                            p_confidences = prediction.confidences
+                            if prediction.raw_tag is not None:
+                                p_labels = [prediction.raw_tag]
+                                p_confidences = [prediction.raw_confidence]
+                            for label, pred_ebird_ids, confidence in zip(
+                                p_labels, prediction.ebird_ids, p_confidences
                             ):
                                 found = len(pred_ebird_ids) == 0 or next(
                                     (
@@ -142,14 +146,39 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                 if found:
                                     t_labels.append(label)
                                     ebird_ids.append(pred_ebird_ids)
+                                    t_confidences.append(confidence)
                                 else:
                                     logging.debug("Region filtering %s", label)
                                     prediction.filtered_labels.append(
-                                        (label, pred_ebird_ids)
+                                        (label, pred_ebird_ids, confidence)
                                     )
-
-                            prediction.labels = t_labels
-                            prediction.ebird_ids = ebird_ids
+                            if prediction.raw_tag is not None:
+                                prediction.raw_tag = (
+                                    t_labels[0] if len(t_labels) > 0 else None
+                                )
+                                prediction.ebird_ids = ebird_ids
+                                prediction.raw_confidence = (
+                                    t_confidences[0] if len(t_confidences) > 0 else None
+                                )
+                            else:
+                                prediction.labels = t_labels
+                                prediction.ebird_ids = ebird_ids
+                                prediction.confidences = t_confidences
+                            if len(prediction.filtered_labels) > 0:
+                                if "bird" not in prediction.labels:
+                                    logging.info(
+                                        "Adding bird as specific bird labels were filtered"
+                                    )
+                                    prediction.labels.append("bird")
+                                    prediction.ebird_ids.append([])
+                                    prediction.confidences.append(
+                                        max(
+                                            [
+                                                filtered[2]
+                                                for filtered in prediction.filtered_labels
+                                            ]
+                                        )
+                                    )
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:
@@ -167,14 +196,71 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                     "chirp_index": chirp_index,
                     "signals": [s.to_array() for s in signals],
                 }
-
+    result["non_bird_tags"] = NON_BIRD
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
 
 
+def find_square(squares, lng, lat):
+    high = len(squares)
+    low = 0
+    found = None
+    # squares in order of lng so can binary search
+    while high >= low:
+        mid = (high + low) // 2
+        square = squares[mid]
+        bounds = square["bounds"]
+        if bounds[0] <= lng and bounds[2] >= lng:
+            found = mid
+            break
+        if bounds[2] < lng:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    decrement = False
+    while True:
+        if mid < 0:
+            return None
+        if mid < len(squares):
+            square = squares[mid]
+            bounds = square["bounds"]
+        if mid > len(squares) or bounds[0] > lng:
+            if decrement:
+                return None
+            decrement = True
+            mid = found - 1
+            continue
+
+        if bounds[1] <= lat and bounds[3] >= lat:
+            return square
+            break
+        if decrement:
+            mid -= 1
+        else:
+            mid += 1
+
+
+def merge_neighbours(square, species_meta):
+    species_per_month = square["species_per_month"]
+    for neighbour in square["neighbours_i"]:
+        neighbour_species = species_meta[neighbour]["species_per_month"]
+        for species, month_data in neighbour_species.items():
+            if species not in species_per_month:
+                species_per_month[species] = month_data.copy()
+                continue
+            for (
+                m,
+                c,
+            ) in month_data.items():
+                species_per_month[species][m] += c
+    return species_per_month
+
+
 def species_by_location(rec_metadata):
-    species_file = Path("/Melt/ebird_species.json")
+
+    species_file = Path("./Melt/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f)
@@ -196,12 +282,30 @@ def species_by_location(rec_metadata):
                 species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
+        species_square_file = Path("./Melt/ebird_species_per_square.json")
         lat = location_data.get("lat")
         lng = location_data.get("lng")
-        # "lat": -36.997142,
-        # "lng": 174.57328
+        if species_square_file.exists():
+            with species_square_file.open("r") as f:
+                species_square_data = json.load(f)
 
-        # match lat lng
+            square = find_square(species_square_data, lng, lat)
+            if square is not None:
+                species_per_month = merge_neighbours(square, species_square_data)
+                total = 0
+                for month in species_per_month.values():
+                    total += sum(month.values())
+                if total < 30 and len(species_per_month) > 3:
+                    logging.info(
+                        "Not using atlas square filtering as data is incomplete, falling back to region"
+                    )
+                else:
+                    species_list = list(species_per_month.keys())
+                    region_code = square["region_code"]
+                    # might decide to filter out rare observations i.e. 1% or lower
+                    logging.info("Found species list of %s", species_list)
+                    return species_list, region_code
+
         for code, species_info in species_data.items():
             region_bounds = species_info["region"]["info"]["bounds"]
             if (
@@ -216,11 +320,6 @@ def species_by_location(rec_metadata):
                     "Match lat %s lng %s to region %s ", lat, lng, species_info
                 )
                 break
-
-                #         "minX": 174.160829,
-                # "maxX": 175.551667,
-                # "minY": -37.380549,
-                # "maxY": -35.899166
     return species_list, region_code
 
 
