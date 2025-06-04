@@ -292,11 +292,19 @@ def species_by_location(rec_metadata):
             square = find_square(species_square_data, lng, lat)
             if square is not None:
                 species_per_month = merge_neighbours(square, species_square_data)
-                species_list = list(species_per_month.keys())
-                region_code = square["region_code"]
-                # might decide to filter out rare observations i.e. 1% or lower
-                logging.info("Found species list of %s", species_list)
-                return species_list, region_code
+                total = 0
+                for month in species_per_month.values():
+                    total += sum(month.values())
+                if total < 30 and len(species_per_month) > 3:
+                    logging.info(
+                        "Not using atlas square filtering as data is incomplete, falling back to region"
+                    )
+                else:
+                    species_list = list(species_per_month.keys())
+                    region_code = square["region_code"]
+                    # might decide to filter out rare observations i.e. 1% or lower
+                    logging.info("Found species list of %s", species_list)
+                    return species_list, region_code
 
         for code, species_info in species_data.items():
             region_bounds = species_info["region"]["info"]["bounds"]
