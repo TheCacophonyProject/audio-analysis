@@ -87,8 +87,8 @@ def filter_tracks(tracks):
     filtered = [
         t
         for t in tracks
-        if len(t.predictions[0].labels) > 0
-        and any([l for l in t.predictions[0].labels if l not in NON_BIRD])
+        if len(t.results[0].predictions) > 0
+        and any([p for p in t.results[0].predictions if p.what not in NON_BIRD])
     ]
     return filtered
 
@@ -102,9 +102,11 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     if meta_file.exists():
         with meta_file.open("r") as f:
             meta_data = json.load(f)
+
     if morepork_model is not None and not analyse_tracks:
         morepork_ids = identify_morepork(file_name, morepork_model)
         labels.extend(morepork_ids)
+
     if bird_models is not None:
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
@@ -121,64 +123,66 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                         observed_species,
                     )
                     for track in tracks:
-                        for prediction in track.predictions:
-                            if len(prediction.ebird_ids) == 0:
+                        for model_result in track.results:
+                            if len(model_result.predictoins) == 0:
                                 continue
-                            t_labels = []
-                            ebird_ids = []
-                            t_confidences = []
-                            p_labels = prediction.labels
-                            p_confidences = prediction.confidences
-                            if prediction.raw_tag is not None:
-                                p_labels = [prediction.raw_tag]
-                                p_confidences = [prediction.raw_confidence]
-                            for label, pred_ebird_ids, confidence in zip(
-                                p_labels, prediction.ebird_ids, p_confidences
-                            ):
-                                found = len(pred_ebird_ids) == 0 or next(
-                                    (
-                                        True
-                                        for track_ebird in pred_ebird_ids
-                                        if track_ebird in observed_species
-                                    ),
-                                    False,
+                            filtered_bird = False
+
+                            accepted_predictions = []
+                            predictions = model_result.predictions
+                            if model_result.raw_prediction is not None:
+                                predictions = [prediction.raw_prediction]
+                            for prediction in predictions:
+                                found = (
+                                    prediction.ebird_id is None
+                                    or prediction.ebird_id in observed_species
                                 )
+
                                 if found:
-                                    t_labels.append(label)
-                                    ebird_ids.append(pred_ebird_ids)
-                                    t_confidences.append(confidence)
+                                    accepted_predictions.append(prediction)
                                 else:
-                                    logging.debug("Region filtering %s", label)
-                                    prediction.filtered_labels.append(
-                                        (label, pred_ebird_ids, confidence)
+                                    filtered_bird = True
+                                    prediction.filtered = True
+                                    logging.debug(
+                                        "Region filtering %s", prediction.what
                                     )
-                            if prediction.raw_tag is not None:
-                                prediction.raw_tag = (
-                                    t_labels[0] if len(t_labels) > 0 else None
+
+                            # if prediction.raw_tag is not None:
+
+                            #     prediction.raw_tag = (
+                            #         t_labels[0] if len(t_labels) > 0 else None
+                            #     )
+                            #     prediction.ebird_ids = ebird_ids
+                            #     prediction.raw_confidence = (
+                            #         t_confidences[0] if len(t_confidences) > 0 else None
+                            #     )
+                            # else:
+                            #     prediction.labels = t_labels
+                            #     prediction.ebird_ids = ebird_ids
+                            #     prediction.confidences = t_confidences
+                            if filtered_bird:
+                                has_generic_bird = any(
+                                    [
+                                        p
+                                        for p in model_result.predictions
+                                        if p.what == "bird"
+                                    ]
                                 )
-                                prediction.ebird_ids = ebird_ids
-                                prediction.raw_confidence = (
-                                    t_confidences[0] if len(t_confidences) > 0 else None
-                                )
-                            else:
-                                prediction.labels = t_labels
-                                prediction.ebird_ids = ebird_ids
-                                prediction.confidences = t_confidences
-                            if len(prediction.filtered_labels) > 0:
-                                if "bird" not in prediction.labels:
+                                if not has_generic_bird:
                                     logging.info(
                                         "Adding bird as specific bird labels were filtered"
                                     )
-                                    prediction.labels.append("bird")
-                                    prediction.ebird_ids.append([])
-                                    prediction.confidences.append(
-                                        max(
-                                            [
-                                                filtered[2]
-                                                for filtered in prediction.filtered_labels
-                                            ]
-                                        )
+                                    confidence = max(
+                                        [
+                                            p.confidence
+                                            for p in model_result.predictions
+                                            if p.filtered
+                                        ]
                                     )
+                                    model_result.predictions.append(
+                                        "bird", confidence, None
+                                    )
+
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:
@@ -398,7 +402,6 @@ def main():
     init_logging()
     t0 = time.time()
     summary = None
-    result = 0
 
     if args.old_cacophony_index:
         import cacophony_index
@@ -431,7 +434,7 @@ def main():
         with metadata_file.open("w") as f:
             json.dump(metadata, f, sort_keys=True, indent=4)
 
-    return result
+    return
 
 
 def init_logging():

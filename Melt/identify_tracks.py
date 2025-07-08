@@ -449,6 +449,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         prob_thresh = meta.get("threshold", 0.7)
         bird_thresh = meta.get("bird_thresh", 0.5)
         n_fft = meta.get("n_fft", 4096)
+        pre_model = meta.get("pre_model", False)
 
         if n_fft is None:
             n_fft = 4096
@@ -493,9 +494,12 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
             prediction = np.mean(predictions, axis=0)
             max_p = None
-            result = ModelResult(model_name)
-            t.predictions.append(result)
+            result = ModelResult(model_name, pre_model)
+            t.results.append(result)
             bird_prob = 0
+
+            # just sum up confidences of all bird species as add generic tag
+            # if threshold is met, probably will use seperate model for this in future
             if not multi_label and "bird" not in labels:
                 for p in predictions:
                     max_i = np.argmax(p)
@@ -504,31 +508,36 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 if len(predictions) > 0:
                     bird_prob = bird_prob / len(predictions)
                 if bird_prob > bird_thresh:
-                    result.labels.append("bird")
-                    if ebird_ids is not None:
-                        result.ebird_ids.append([])
-                    result.confidences.append(round(bird_prob * 100))
+                    result.add_prediction("bird", bird_prob, None)
+                    # result.labels.append("bird")
+                    # if ebird_ids is not None:
+                    #     result.ebird_ids.append([])
+                    # result.confidences.append(round(bird_prob * 100))
 
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
                     max_p = (i, p)
                 if p >= prob_thresh:
-                    result.labels.append(labels[i])
+                    ebird_id = None
                     if ebird_ids is not None:
-                        result.ebird_ids.append(ebird_ids[i])
-                    result.confidences.append(round(p * 100))
-            if len(result.labels) == 0:
+                        ebird_id = ebird_ids[i]
+                    result.add_prediction(labels[i], p, ebird_id)
+
+            if len(result.predictions) == 0:
                 # use max prediction
-                result.raw_tag = labels[max_p[0]]
-                result.raw_confidence = round(max_p[1] * 100)
+                ebird_id = None
                 if ebird_ids is not None:
-                    result.ebird_ids.append(ebird_ids[max_p[0]])
+                    ebird_id = ebird_ids[max_p[0]]
+                result.raw_prediction = Prediction(labels[max_p[0]], max_p[1], ebird_id)
+
     sorted_tracks = []
     for t in tracks:
         # just use first model
-        result = t.predictions[0]
-        for l in result.labels:
-            if l in bird_labels:
+        if len(t.results) > 1:
+            logging.info("Using first model for measuring chirps")
+        result = t.results[0]
+        for p in result.predictions:
+            if p.what in bird_labels:
                 sorted_tracks.append(t)
                 break
     sorted_tracks = sorted(
@@ -753,30 +762,58 @@ def get_tracks_from_signals(signals, end):
     return signals
 
 
+class Prediction:
+    def __init__(self, what, confidence, ebird_id):
+        self.what = what
+        self.confidence = (round(100 * confidence),)
+        self.ebird_id = ebird_id
+        self.filtered = False
+
+    def get_meta(self):
+        meta = {}
+        meta["what"] = self.what
+        meta["confidence"] = self.confidence
+        meta["filtered"] = self.filtered
+        meta["ebird_id"] = self.ebird_id
+        return meta
+
+
 # TODO predictions should be moved into there own structure
 class ModelResult:
-    def __init__(self, model):
+    def __init__(self, model, pre_model):
         self.model = model
-        self.filtered_labels = []
-        self.labels = []
-        self.ebird_ids = []
-        self.confidences = []
-        self.raw_tag = None
-        self.raw_confidence = None
+        self.pre_model = pre_model
+        self.raw_prediction = None
+        # self.raw_tag = None
+        # self.raw_confidence = None
+        self.predictions = []
+
+    def add_prediction(self, what, confidence, ebird_ids):
+        eid = ebird_ids
+        if ebird_ids is not None and len(ebird_ids) == 0:
+            eid = None
+        p = Prediction(what, confidence, eid)
+        self.predictions.append(p)
 
     def get_meta(self):
         meta = {}
         meta["model"] = self.model
-        meta["filtered_species"] = self.filtered_labels
-        meta["species"] = self.labels
-        meta["likelihood"] = self.confidences
-        # used when no actual tag
-        if self.raw_tag is not None:
-            meta["raw_tag"] = self.raw_tag
-            meta["raw_confidence"] = self.raw_confidence
-            meta["raw_ebird_ids"] = self.ebird_ids
-        else:
-            meta["ebird_ids"] = self.ebird_ids
+        meta["pre_model"] = self.pre_model
+
+        meta["predictions"] = [p.get_meta() for p in self.predictions]
+        if self.raw_prediction is not None:
+            meta["raw_prediction"] = self.raw_prediction.get_meta()
+
+        # meta["filtered_species"] = self.filtered_labels
+        # meta["species"] = self.labels
+        # meta["likelihood"] = self.confidences
+        # # used when no actual tag
+        # if self.raw_tag is not None:
+        #     meta["raw_tag"] = self.raw_tag
+        #     meta["raw_confidence"] = self.raw_confidence
+        #     meta["raw_ebird_ids"] = self.ebird_ids
+        # else:
+        #     meta["ebird_ids"] = self.ebird_ids
 
         return meta
 
@@ -790,7 +827,7 @@ class Signal:
 
         self.mel_freq_start = mel_freq(freq_start)
         self.mel_freq_end = mel_freq(freq_end)
-        self.predictions = []
+        self.results = []
         self.track_id = None
         # self.model = None
         # self.labels = None
@@ -878,7 +915,7 @@ class Signal:
         meta["end_s"] = self.end
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
-        meta["predictions"] = [r.get_meta() for r in self.predictions]
+        meta["model_results"] = [r.get_meta() for r in self.results]
         if self.track_id is not None:
             meta["track_id"] = self.track_id
         return meta
