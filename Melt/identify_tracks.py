@@ -765,7 +765,7 @@ def get_tracks_from_signals(signals, end):
 class Prediction:
     def __init__(self, what, confidence, ebird_id):
         self.what = what
-        self.confidence = (round(100 * confidence),)
+        self.confidence = round(100 * confidence)
         self.ebird_id = ebird_id
         self.filtered = False
 

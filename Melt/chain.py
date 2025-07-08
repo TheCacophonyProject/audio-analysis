@@ -124,7 +124,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                     )
                     for track in tracks:
                         for model_result in track.results:
-                            if len(model_result.predictoins) == 0:
+                            if len(model_result.predictions) == 0:
                                 continue
                             filtered_bird = False
 
@@ -179,7 +179,7 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                             if p.filtered
                                         ]
                                     )
-                                    model_result.predictions.append(
+                                    model_result.add_prediction(
                                         "bird", confidence, None
                                     )
 
