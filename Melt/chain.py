@@ -180,7 +180,10 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                                         ]
                                     )
                                     model_result.add_prediction(
-                                        "bird", confidence, None
+                                        "bird",
+                                        confidence,
+                                        None,
+                                        normalize_confidence=False,
                                     )
 
             labels.extend([track.get_meta() for track in tracks])

@@ -763,9 +763,12 @@ def get_tracks_from_signals(signals, end):
 
 
 class Prediction:
-    def __init__(self, what, confidence, ebird_id):
+    def __init__(self, what, confidence, ebird_id, normalize_confidence=True):
         self.what = what
-        self.confidence = round(100 * confidence)
+        if normalize_confidence:
+            self.confidence = round(100 * confidence)
+        else:
+            self.confidence = confidence
         self.ebird_id = ebird_id
         self.filtered = False
 
@@ -788,11 +791,11 @@ class ModelResult:
         # self.raw_confidence = None
         self.predictions = []
 
-    def add_prediction(self, what, confidence, ebird_ids):
+    def add_prediction(self, what, confidence, ebird_ids, normalize_confidence=True):
         eid = ebird_ids
         if ebird_ids is not None and len(ebird_ids) == 0:
             eid = None
-        p = Prediction(what, confidence, eid)
+        p = Prediction(what, confidence, eid, normalize_confidence)
         self.predictions.append(p)
 
     def get_meta(self):
