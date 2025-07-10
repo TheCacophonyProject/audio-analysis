@@ -14,6 +14,7 @@ CALL_LENGTH = 1
 
 DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
 NON_BIRD = ["human", "noise", "insect"]
+SPECIFIC_NOISE = ["insect"]
 
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
@@ -419,6 +420,9 @@ def classify(file, models, analyse_tracks, meta_data=None):
         tracks = [s.copy() for s in signals]
 
         tracks = get_tracks_from_signals(tracks, length)
+    if len(tracks) == 0:
+        return [], length, 0, [], raw_length
+
     mel_data = None
     for model_file in models:
         model, meta = load_model(Path(model_file))
@@ -532,14 +536,13 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
     sorted_tracks = []
     for t in tracks:
+        t.set_master_tag()
         # just use first model
         if len(t.results) > 1:
             logging.info("Using first model for measuring chirps")
         result = t.results[0]
-        for p in result.predictions:
-            if p.what in bird_labels:
-                sorted_tracks.append(t)
-                break
+        if t.master_tag is not None and t.master_tag.what in bird_labels:
+            sorted_tracks.append(t)
     sorted_tracks = sorted(
         sorted_tracks,
         key=lambda track: track.start,
@@ -570,6 +573,57 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 i += 1
         last_end = t.end
     return tracks, length, chirps, signals, raw_length
+
+
+def get_master_tag(track):
+
+    pre_model = None
+    other_model = []
+    for model_result in track.results:
+        if model_result.pre_model:
+            pre_model = model_result
+        for p in model_result.predictions:
+            other_model.append((p, model_result.model))
+    pre_prediction = None
+    # assume for now pre model is just a single label
+    if pre_model is not None and len(pre_model.predictions) > 0:
+        pre_prediction = pre_model.predictions[0]
+        if pre_prediction.what == "noise":
+            # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
+            other_model_prediction = next(
+                (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
+            )
+            if other_model_prediction is not None:
+                return other_model_prediction
+            return pre_prediction, pre_model.model
+        elif pre_prediction.what == "morepork":
+            return pre_prediction, pre_model.model
+        elif pre_prediction.what == "human":
+            return pre_prediction, pre_model.model
+        # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
+        other_model = [
+            p for p in other_model if p[0].what != "morepork" and p[0].what != "bird"
+        ]
+    # may want some other rulse for human also will need to test what works
+    ordered = sorted(
+        other_model,
+        key=lambda prediction: (prediction[0].confidence),
+        reverse=True,
+    )
+    # choose most specific tag first
+    first_specific = (None, None)
+    for p in ordered:
+        if p[0].what == "bird":
+            continue
+        first_specific = p
+        break
+
+    if first_specific is None and len(ordered) > 0:
+        first_specific = ordered[0]
+
+    if (first_specific is None) and pre_prediction is not None:
+        return pre_prediction, pre_model.model
+    return first_specific
 
 
 def signal_noise(frames, sr, hop_length=281):
@@ -831,12 +885,19 @@ class Signal:
         self.mel_freq_start = mel_freq(freq_start)
         self.mel_freq_end = mel_freq(freq_end)
         self.results = []
+        self.master_tag = None
+        self.master_model = None
         self.track_id = None
         # self.model = None
         # self.labels = None
         # self.confidences = None
         # self.raw_tag = None
         # self.raw_confidence = None
+
+    def set_master_tag(self):
+        master_tag, model = get_master_tag(self)
+        self.master_tag = master_tag
+        self.model = model
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
@@ -918,6 +979,11 @@ class Signal:
         meta["end_s"] = self.end
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
+        if self.master_tag is not None:
+            meta["master_tag"] = {
+                "prediction": self.master_tag.get_meta(),
+                "model": self.master_model,
+            }
         meta["model_results"] = [r.get_meta() for r in self.results]
         if self.track_id is not None:
             meta["track_id"] = self.track_id

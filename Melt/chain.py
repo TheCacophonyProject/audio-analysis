@@ -87,8 +87,7 @@ def filter_tracks(tracks):
     filtered = [
         t
         for t in tracks
-        if len(t.results[0].predictions) > 0
-        and any([p for p in t.results[0].predictions if p.what not in NON_BIRD])
+        if t.master_tag is not None and t.master_tag.what not in NON_BIRD
     ]
     return filtered
 
