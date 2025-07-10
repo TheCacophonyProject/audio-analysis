@@ -113,6 +113,10 @@ def load_samples(
     mel_samples = []
     for t in tracks:
         track_data = []
+        if t.freq_start > fmax:
+            mel_samples.append(track_data)
+            # no need to id these tracks
+            continue
         start = 0
         end = start + segment_length
 
@@ -492,6 +496,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
         for i, l in enumerate(labels):
             bird_indexes.append(l not in NON_BIRD)
         for d, t in zip(data, tracks):
+            if len(d) == 0:
+                continue
             if "efficientnet" in model_name.lower():
                 d = np.repeat(d, 3, -1)
             predictions = model.predict(np.array(d), verbose=0)
@@ -538,9 +544,6 @@ def classify(file, models, analyse_tracks, meta_data=None):
     for t in tracks:
         t.set_master_tag()
         # just use first model
-        if len(t.results) > 1:
-            logging.info("Using first model for measuring chirps")
-        result = t.results[0]
         if t.master_tag is not None and t.master_tag.what in bird_labels:
             sorted_tracks.append(t)
     sorted_tracks = sorted(
@@ -776,7 +779,6 @@ def get_tracks_from_signals(signals, end):
     # just keep merging until there are no more valid merges
     merged = True
     min_mel_range = 50
-
     while merged:
         signals, merged = merge_signals(signals)
 
@@ -789,6 +791,10 @@ def get_tracks_from_signals(signals, end):
         if s.length < min_length:
             to_delete.append(s)
             continue
+
+        s.enlarge(1.4, min_track_length=min_track_length)
+        s.end = min(end, s.end)
+
         for s2 in signals:
             if s2 in to_delete:
                 continue
@@ -799,7 +805,8 @@ def get_tracks_from_signals(signals, end):
             mel_overlap = s.freq_overlap(s2)
             min_length = min(s.length, s2.length)
             # 2200 chosen on testing some files may be too leniant
-            if overlap > 0.7 * min_length and abs(mel_overlap) < 2200:
+            # was also filtering by  and abs(mel_overlap) < 2200:
+            if overlap > 0.7 * min_length:
                 s.merge(s2)
                 to_delete.append(s2)
 
@@ -807,8 +814,9 @@ def get_tracks_from_signals(signals, end):
         signals.remove(s)
     to_delete = []
     for s in signals:
-        s.enlarge(1.4, min_track_length=min_track_length)
-        s.end = min(end, s.end)
+        # doing earlier now
+        # s.enlarge(1.4, min_track_length=min_track_length)
+        # s.end = min(end, s.end)
         if s.mel_freq_range < min_mel_range:
             to_delete.append(s)
     for s in to_delete:
