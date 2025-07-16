@@ -428,6 +428,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         return [], length, 0, [], raw_length
 
     mel_data = None
+    bird_labels = set()
     for model_file in models:
         model, meta = load_model(Path(model_file))
         filter_freqs = meta.get("filter_freq", True)
@@ -451,7 +452,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         fmax = meta.get("fmax", 11000)
         power = meta.get("power", 2)
         db_scale = meta.get("db_scale", True)
-        bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
+        model_bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
@@ -459,6 +460,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         n_fft = meta.get("n_fft", 4096)
         pre_model = meta.get("pre_model", False)
 
+        bird_labels.update(model_bird_labels)
         if n_fft is None:
             n_fft = 4096
         normalize = meta.get("normalize", True)
@@ -540,73 +542,42 @@ def classify(file, models, analyse_tracks, meta_data=None):
                     ebird_id = ebird_ids[max_p[0]]
                 result.raw_prediction = Prediction(labels[max_p[0]], max_p[1], ebird_id)
 
-    sorted_tracks = []
-    for t in tracks:
-        t.set_master_tag()
-        # just use first model
-        if t.master_tag is not None and t.master_tag.what in bird_labels:
-            sorted_tracks.append(t)
-    sorted_tracks = sorted(
-        sorted_tracks,
-        key=lambda track: track.start,
-    )
-    last_end = 0
-    track_index = 0
-    chirps = 0
-    # overlapping signals with bird tracks
-    for t in sorted_tracks:
-        start = t.start
-        end = t.end
-        if start < last_end:
-            start = last_end
-            end = max(start, end)
-        i = 0
-        while i < len(signals):
-            s = signals[i]
-            if (
-                segment_overlap((start, end), (s.start, s.end)) > 0
-                and t.mel_freq_overlap(s) > -200
-            ):
-                chirps += 1
-                # dont want to count twice
-                del signals[i]
-            elif s.start > end:
-                break
-            else:
-                i += 1
-        last_end = t.end
-    return tracks, length, chirps, signals, raw_length
+    return tracks, length, signals, raw_length, list(bird_labels)
 
 
 def get_master_tag(track):
-
     pre_model = None
     other_model = []
     for model_result in track.results:
         if model_result.pre_model:
             pre_model = model_result
         for p in model_result.predictions:
+            if p.filtered:
+                continue
             other_model.append((p, model_result.model))
     pre_prediction = None
     # assume for now pre model is just a single label
     if pre_model is not None and len(pre_model.predictions) > 0:
         pre_prediction = pre_model.predictions[0]
-        if pre_prediction.what == "noise":
-            # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
-            other_model_prediction = next(
-                (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
-            )
-            if other_model_prediction is not None:
-                return other_model_prediction
-            return pre_prediction, pre_model.model
-        elif pre_prediction.what == "morepork":
-            return pre_prediction, pre_model.model
-        elif pre_prediction.what == "human":
-            return pre_prediction, pre_model.model
-        # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
-        other_model = [
-            p for p in other_model if p[0].what != "morepork" and p[0].what != "bird"
-        ]
+        if not pre_prediction.filtered:
+            if pre_prediction.what == "noise":
+                # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
+                other_model_prediction = next(
+                    (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
+                )
+                if other_model_prediction is not None:
+                    return other_model_prediction
+                return pre_prediction, pre_model.model
+            elif pre_prediction.what == "morepork":
+                return pre_prediction, pre_model.model
+            elif pre_prediction.what == "human":
+                return pre_prediction, pre_model.model
+            # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
+            other_model = [
+                p
+                for p in other_model
+                if p[0].what != "morepork" and p[0].what != "bird"
+            ]
     # may want some other rulse for human also will need to test what works
     ordered = sorted(
         other_model,
@@ -614,7 +585,7 @@ def get_master_tag(track):
         reverse=True,
     )
     # choose most specific tag first
-    first_specific = (None, None)
+    first_specific = None
     for p in ordered:
         if p[0].what == "bird":
             continue
@@ -624,8 +595,9 @@ def get_master_tag(track):
     if first_specific is None and len(ordered) > 0:
         first_specific = ordered[0]
 
-    if (first_specific is None) and pre_prediction is not None:
-        return pre_prediction, pre_model.model
+    if first_specific is None:
+        if pre_prediction is not None:
+            return pre_prediction, pre_model.model
     return first_specific
 
 
@@ -903,7 +875,10 @@ class Signal:
         # self.raw_confidence = None
 
     def set_master_tag(self):
-        master_tag, model = get_master_tag(self)
+        master_tag = get_master_tag(self)
+        if master_tag is None:
+            return
+        master_tag, model = master_tag
         self.master_tag = master_tag
         self.model = model
 
