@@ -196,17 +196,22 @@ def filter_by_location(meta_data, tracks):
                 if model_result.raw_prediction is not None:
                     predictions = [prediction.raw_prediction]
                 for prediction in predictions:
-                    found = (
-                        prediction.ebird_id is None
-                        or prediction.ebird_id in observed_species
-                    )
-
-                    if found:
+                    if prediction.ebird_id is None or any(
+                        [
+                            ebird
+                            for ebird in prediction.ebird_id
+                            if ebird in observed_species
+                        ]
+                    ):
                         accepted_predictions.append(prediction)
                     else:
                         filtered_bird = True
                         prediction.filtered = True
-                        logging.info("Region filtering %s", prediction.what)
+                        logging.info(
+                            "Region filtering %s ebird %s",
+                            prediction.what,
+                            prediction.ebird_id,
+                        )
                 if filtered_bird:
                     has_generic_bird = any(
                         [p for p in model_result.predictions if p.what == "bird"]
