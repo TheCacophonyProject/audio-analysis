@@ -425,7 +425,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
         tracks = get_tracks_from_signals(tracks, length)
     if len(tracks) == 0:
-        return [], length, 0, [], raw_length
+        return [], length, [], raw_length, []
 
     mel_data = None
     bird_labels = set()
@@ -492,7 +492,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             )
             data = mel_data
         if len(data) == 0:
-            return [], length, 0, [], raw_length
+            return [], length, [], raw_length, []
 
         bird_indexes = []
         for i, l in enumerate(labels):
