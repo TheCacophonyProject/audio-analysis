@@ -557,22 +557,34 @@ def get_master_tag(track):
             other_model.append((p, model_result.model))
     pre_prediction = None
     # assume for now pre model is just a single label
-    if pre_model is not None and len(pre_model.predictions) > 0:
-        pre_prediction = pre_model.predictions[0]
-        if not pre_prediction.filtered:
-            if pre_prediction.what == "noise":
-                # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
-                other_model_prediction = next(
-                    (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
-                )
-                if other_model_prediction is not None:
-                    return other_model_prediction
-                return pre_prediction, pre_model.model
-            elif pre_prediction.what == "morepork":
-                return pre_prediction, pre_model.model
-            elif pre_prediction.what == "human":
-                return pre_prediction, pre_model.model
+    if pre_model is not None:
+        filter_moreporks = False
+        if len(pre_model.predictions) > 0:
+            pre_prediction = pre_model.predictions[0]
+            if not pre_prediction.filtered:
+                if pre_prediction.what == "noise":
+                    # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
+                    other_model_prediction = next(
+                        (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
+                    )
+                    if other_model_prediction is not None:
+                        return other_model_prediction
+                    return pre_prediction, pre_model.model
+                elif pre_prediction.what == "morepork":
+                    return pre_prediction, pre_model.model
+                elif pre_prediction.what == "human":
+                    return pre_prediction, pre_model.model
+            filter_moreporks = True
             # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
+        elif (
+            pre_model.raw_prediction.what in ["noise", "human"]
+            and pre_model.raw_prediction.confidence > 50
+        ):
+            # should we just accept this tag if its noise
+            filter_moreporks = True
+
+        if filter_moreporks:
+
             other_model = [
                 p
                 for p in other_model
