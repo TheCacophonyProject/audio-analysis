@@ -252,7 +252,7 @@ def find_square(squares, lng, lat):
         else:
             high = mid - 1
     if found is None:
-        logging.error("Could not find species square for %s, %s",lng,lat)
+        logging.error("Could not find species square for %s, %s", lng, lat)
         return None
     decrement = False
     while True:
