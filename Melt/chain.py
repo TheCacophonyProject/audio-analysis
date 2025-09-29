@@ -9,8 +9,7 @@ import sys
 import time
 
 import common
-from identify_morepork import identify_morepork
-from identify_tracks import classify, get_max_chirps, NON_BIRD
+from identify_tracks import classify, get_max_chirps, NON_BIRD, segment_overlap
 import math
 from pathlib import Path
 import argparse
@@ -87,13 +86,49 @@ def filter_tracks(tracks):
     filtered = [
         t
         for t in tracks
-        if len(t.predictions[0].labels) > 0
-        and any([l for l in t.predictions[0].labels if l not in NON_BIRD])
+        if t.master_tag is not None and t.master_tag.what not in NON_BIRD
     ]
     return filtered
 
 
-def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
+def get_chirps(tracks, bird_labels, signals):
+    sorted_tracks = []
+    for t in tracks:
+        if t.master_tag is not None and t.master_tag.what in bird_labels:
+            sorted_tracks.append(t)
+    sorted_tracks = sorted(
+        sorted_tracks,
+        key=lambda track: track.start,
+    )
+    last_end = 0
+    track_index = 0
+    chirps = 0
+    # overlapping signals with bird tracks
+    for t in sorted_tracks:
+        start = t.start
+        end = t.end
+        if start < last_end:
+            start = last_end
+            end = max(start, end)
+        i = 0
+        while i < len(signals):
+            s = signals[i]
+            if (
+                segment_overlap((start, end), (s.start, s.end)) > 0
+                and t.mel_freq_overlap(s) > -200
+            ):
+                chirps += 1
+                # dont want to count twice
+                del signals[i]
+            elif s.start > end:
+                break
+            else:
+                i += 1
+        last_end = t.end
+    return chirps
+
+
+def species_identify(file_name, bird_models, analyse_tracks):
     labels = []
     result = {}
     meta_file = Path(file_name).with_suffix(".txt")
@@ -102,83 +137,23 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
     if meta_file.exists():
         with meta_file.open("r") as f:
             meta_data = json.load(f)
-    if morepork_model is not None and not analyse_tracks:
-        morepork_ids = identify_morepork(file_name, morepork_model)
-        labels.extend(morepork_ids)
+
     if bird_models is not None:
         classify_res = classify(file_name, bird_models, analyse_tracks, meta_data)
         if classify_res is not None:
-            tracks, length, chirps, signals, raw_length = classify_res
+
+            tracks, length, signals, raw_length, bird_labels = classify_res
+
+            if meta_data is not None:
+                filter_by_location(meta_data, tracks)
+
+            for t in tracks:
+                t.set_master_tag()
+            rec_signals = [s.to_array() for s in signals]
+            chirps = get_chirps(tracks, bird_labels, signals)
             cacophony_index, version = calc_cacophony_index(
                 filter_tracks(tracks), length
             )
-            if meta_data is not None:
-                observed_species, region_code = species_by_location(meta_data)
-                if region_code is not None:
-                    logging.debug(
-                        "Matching to region code %s species list %s",
-                        region_code,
-                        observed_species,
-                    )
-                    for track in tracks:
-                        for prediction in track.predictions:
-                            if len(prediction.ebird_ids) == 0:
-                                continue
-                            t_labels = []
-                            ebird_ids = []
-                            t_confidences = []
-                            p_labels = prediction.labels
-                            p_confidences = prediction.confidences
-                            if prediction.raw_tag is not None:
-                                p_labels = [prediction.raw_tag]
-                                p_confidences = [prediction.raw_confidence]
-                            for label, pred_ebird_ids, confidence in zip(
-                                p_labels, prediction.ebird_ids, p_confidences
-                            ):
-                                found = len(pred_ebird_ids) == 0 or next(
-                                    (
-                                        True
-                                        for track_ebird in pred_ebird_ids
-                                        if track_ebird in observed_species
-                                    ),
-                                    False,
-                                )
-                                if found:
-                                    t_labels.append(label)
-                                    ebird_ids.append(pred_ebird_ids)
-                                    t_confidences.append(confidence)
-                                else:
-                                    logging.debug("Region filtering %s", label)
-                                    prediction.filtered_labels.append(
-                                        (label, pred_ebird_ids, confidence)
-                                    )
-                            if prediction.raw_tag is not None:
-                                prediction.raw_tag = (
-                                    t_labels[0] if len(t_labels) > 0 else None
-                                )
-                                prediction.ebird_ids = ebird_ids
-                                prediction.raw_confidence = (
-                                    t_confidences[0] if len(t_confidences) > 0 else None
-                                )
-                            else:
-                                prediction.labels = t_labels
-                                prediction.ebird_ids = ebird_ids
-                                prediction.confidences = t_confidences
-                            if len(prediction.filtered_labels) > 0:
-                                if "bird" not in prediction.labels:
-                                    logging.info(
-                                        "Adding bird as specific bird labels were filtered"
-                                    )
-                                    prediction.labels.append("bird")
-                                    prediction.ebird_ids.append([])
-                                    prediction.confidences.append(
-                                        max(
-                                            [
-                                                filtered[2]
-                                                for filtered in prediction.filtered_labels
-                                            ]
-                                        )
-                                    )
             labels.extend([track.get_meta() for track in tracks])
 
             if not analyse_tracks:
@@ -194,12 +169,70 @@ def species_identify(file_name, morepork_model, bird_models, analyse_tracks):
                     "chirps": chirps,
                     "max_chirps": max_chirps,
                     "chirp_index": chirp_index,
-                    "signals": [s.to_array() for s in signals],
+                    "signals": rec_signals,
                 }
     result["non_bird_tags"] = NON_BIRD
     result["species_identify"] = labels
     result["species_identify_version"] = "2021-02-01"
     return result
+
+
+def filter_by_location(meta_data, tracks):
+    observed_species, region_code = species_by_location(meta_data)
+    if region_code is not None:
+        logging.debug(
+            "Matching to region code %s species list %s",
+            region_code,
+            observed_species,
+        )
+        for track in tracks:
+            for model_result in track.results:
+                if len(model_result.predictions) == 0:
+                    continue
+                filtered_bird = False
+
+                accepted_predictions = []
+                predictions = model_result.predictions
+                if model_result.raw_prediction is not None:
+                    predictions = [prediction.raw_prediction]
+                for prediction in predictions:
+                    if prediction.ebird_id is None or any(
+                        [
+                            ebird
+                            for ebird in prediction.ebird_id
+                            if ebird in observed_species
+                        ]
+                    ):
+                        accepted_predictions.append(prediction)
+                    else:
+                        filtered_bird = True
+                        prediction.filtered = True
+                        logging.info(
+                            "Region filtering %s ebird %s",
+                            prediction.what,
+                            prediction.ebird_id,
+                        )
+                if filtered_bird:
+                    has_generic_bird = any(
+                        [p for p in model_result.predictions if p.what == "bird"]
+                    )
+                    if not has_generic_bird:
+                        logging.info(
+                            "Adding bird as specific bird labels were filtered"
+                        )
+                        confidence = max(
+                            [
+                                p.confidence
+                                for p in model_result.predictions
+                                if p.filtered
+                            ]
+                        )
+                        model_result.add_prediction(
+                            "bird",
+                            confidence,
+                            None,
+                            normalize_confidence=False,
+                        )
 
 
 def find_square(squares, lng, lat):
@@ -218,7 +251,9 @@ def find_square(squares, lng, lat):
             low = mid + 1
         else:
             high = mid - 1
-
+    if found is None:
+        logging.error("Could not find species square for %s, %s", lng, lat)
+        return None
     decrement = False
     while True:
         if mid < 0:
@@ -323,13 +358,12 @@ def species_by_location(rec_metadata):
     return species_list, region_code
 
 
-def examine(file_name, morepork_model, bird_model, analyse_tracks=False):
-    import cacophony_index
+def examine(file_name, bird_model, analyse_tracks=False):
+    # import cacophony_index
 
-    summary = cacophony_index.calculate(file_name)
-    summary.update(
-        species_identify(file_name, morepork_model, bird_model, analyse_tracks)
-    )
+    # summary = cacophony_index.calculate(file_name)
+    summary = {}
+    summary.update(species_identify(file_name, bird_model, analyse_tracks))
     return summary
 
 
@@ -352,12 +386,7 @@ def parse_args():
         action="count",
         help="Calculate old cacophony index on this file",
     )
-    parser.add_argument(
-        "--morepork-model",
-        default=None,
-        type=none_or_str,
-        help="Path to morepork model",
-    )
+
     parser.add_argument(
         "--bird-model",
         # default=["/models/bird-model"],
@@ -377,7 +406,10 @@ def parse_args():
 
     args = parser.parse_args()
     if args.bird_model is None or len(args.bird_model) == 0:
-        args.bird_model = ["/models/bird-model/audioModel.keras"]
+        args.bird_model = [
+            "/models/pre-model/audioModel.keras",
+            "/models/bird-model/audioModel.keras",
+        ]
 
     return args
 
@@ -398,7 +430,6 @@ def main():
     init_logging()
     t0 = time.time()
     summary = None
-    result = 0
 
     if args.old_cacophony_index:
         import cacophony_index
@@ -407,7 +438,6 @@ def main():
     else:
         summary = examine(
             args.file,
-            args.morepork_model,
             args.bird_model,
             analyse_tracks=args.analyse_tracks,
         )
@@ -431,7 +461,7 @@ def main():
         with metadata_file.open("w") as f:
             json.dump(metadata, f, sort_keys=True, indent=4)
 
-    return result
+    return
 
 
 def init_logging():

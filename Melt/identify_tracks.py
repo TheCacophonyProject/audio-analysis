@@ -14,6 +14,7 @@ CALL_LENGTH = 1
 
 DEFAULT_SPECIES = ["kiwi", "whistler", "morepork"]
 NON_BIRD = ["human", "noise", "insect"]
+SPECIFIC_NOISE = ["insect"]
 
 DEFAULT_BIRDS = ["bird"]
 DEFAULT_BIRDS.extend(DEFAULT_SPECIES)
@@ -112,6 +113,10 @@ def load_samples(
     mel_samples = []
     for t in tracks:
         track_data = []
+        if t.freq_start > fmax or t.freq_end < fmin:
+            mel_samples.append(track_data)
+            # no need to id these tracks
+            continue
         start = 0
         end = start + segment_length
 
@@ -419,7 +424,11 @@ def classify(file, models, analyse_tracks, meta_data=None):
         tracks = [s.copy() for s in signals]
 
         tracks = get_tracks_from_signals(tracks, length)
+    if len(tracks) == 0:
+        return [], length, [], raw_length, []
+
     mel_data = None
+    bird_labels = set()
     for model_file in models:
         model, meta = load_model(Path(model_file))
         filter_freqs = meta.get("filter_freq", True)
@@ -443,13 +452,15 @@ def classify(file, models, analyse_tracks, meta_data=None):
         fmax = meta.get("fmax", 11000)
         power = meta.get("power", 2)
         db_scale = meta.get("db_scale", True)
-        bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
+        model_bird_labels = meta.get("bird_labels", DEFAULT_BIRDS)
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
         bird_thresh = meta.get("bird_thresh", 0.5)
         n_fft = meta.get("n_fft", 4096)
+        pre_model = meta.get("pre_model", False)
 
+        bird_labels.update(model_bird_labels)
         if n_fft is None:
             n_fft = 4096
         normalize = meta.get("normalize", True)
@@ -481,21 +492,26 @@ def classify(file, models, analyse_tracks, meta_data=None):
             )
             data = mel_data
         if len(data) == 0:
-            return [], length, 0, [], raw_length
+            return [], length, [], raw_length, []
 
         bird_indexes = []
         for i, l in enumerate(labels):
             bird_indexes.append(l not in NON_BIRD)
         for d, t in zip(data, tracks):
+            if len(d) == 0:
+                continue
             if "efficientnet" in model_name.lower():
                 d = np.repeat(d, 3, -1)
             predictions = model.predict(np.array(d), verbose=0)
 
             prediction = np.mean(predictions, axis=0)
             max_p = None
-            result = ModelResult(model_name)
-            t.predictions.append(result)
+            result = ModelResult(model_name, pre_model)
+            t.results.append(result)
             bird_prob = 0
+
+            # just sum up confidences of all bird species as add generic tag
+            # if threshold is met, probably will use seperate model for this in future
             if not multi_label and "bird" not in labels:
                 for p in predictions:
                     max_i = np.argmax(p)
@@ -504,63 +520,97 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 if len(predictions) > 0:
                     bird_prob = bird_prob / len(predictions)
                 if bird_prob > bird_thresh:
-                    result.labels.append("bird")
-                    if ebird_ids is not None:
-                        result.ebird_ids.append([])
-                    result.confidences.append(round(bird_prob * 100))
+                    result.add_prediction("bird", bird_prob, None)
+                    # result.labels.append("bird")
+                    # if ebird_ids is not None:
+                    #     result.ebird_ids.append([])
+                    # result.confidences.append(round(bird_prob * 100))
 
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
                     max_p = (i, p)
                 if p >= prob_thresh:
-                    result.labels.append(labels[i])
+                    ebird_id = None
                     if ebird_ids is not None:
-                        result.ebird_ids.append(ebird_ids[i])
-                    result.confidences.append(round(p * 100))
-            if len(result.labels) == 0:
+                        ebird_id = ebird_ids[i]
+                    result.add_prediction(labels[i], p, ebird_id)
+
+            if len(result.predictions) == 0:
                 # use max prediction
-                result.raw_tag = labels[max_p[0]]
-                result.raw_confidence = round(max_p[1] * 100)
+                ebird_id = None
                 if ebird_ids is not None:
-                    result.ebird_ids.append(ebird_ids[max_p[0]])
-    sorted_tracks = []
-    for t in tracks:
-        # just use first model
-        result = t.predictions[0]
-        for l in result.labels:
-            if l in bird_labels:
-                sorted_tracks.append(t)
-                break
-    sorted_tracks = sorted(
-        sorted_tracks,
-        key=lambda track: track.start,
+                    ebird_id = ebird_ids[max_p[0]]
+                result.raw_prediction = Prediction(labels[max_p[0]], max_p[1], ebird_id)
+
+    return tracks, length, signals, raw_length, list(bird_labels)
+
+
+def get_master_tag(track):
+    pre_model = None
+    other_model = []
+    for model_result in track.results:
+        if model_result.pre_model:
+            pre_model = model_result
+        for p in model_result.predictions:
+            if p.filtered:
+                continue
+            other_model.append((p, model_result.model))
+    pre_prediction = None
+    # assume for now pre model is just a single label
+    if pre_model is not None:
+        filter_moreporks = False
+        if len(pre_model.predictions) > 0:
+            pre_prediction = pre_model.predictions[0]
+            if not pre_prediction.filtered:
+                if pre_prediction.what == "noise":
+                    # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
+                    other_model_prediction = next(
+                        (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
+                    )
+                    if other_model_prediction is not None:
+                        return other_model_prediction
+                    return pre_prediction, pre_model.model
+                elif pre_prediction.what == "morepork":
+                    return pre_prediction, pre_model.model
+                elif pre_prediction.what == "human":
+                    return pre_prediction, pre_model.model
+            filter_moreporks = True
+            # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
+        elif (
+            pre_model.raw_prediction.what in ["noise", "human"]
+            and pre_model.raw_prediction.confidence > 50
+        ):
+            # should we just accept this tag if its noise
+            filter_moreporks = True
+
+        if filter_moreporks:
+
+            other_model = [
+                p
+                for p in other_model
+                if p[0].what != "morepork" and p[0].what != "bird"
+            ]
+    # may want some other rulse for human also will need to test what works
+    ordered = sorted(
+        other_model,
+        key=lambda prediction: (prediction[0].confidence),
+        reverse=True,
     )
-    last_end = 0
-    track_index = 0
-    chirps = 0
-    # overlapping signals with bird tracks
-    for t in sorted_tracks:
-        start = t.start
-        end = t.end
-        if start < last_end:
-            start = last_end
-            end = max(start, end)
-        i = 0
-        while i < len(signals):
-            s = signals[i]
-            if (
-                segment_overlap((start, end), (s.start, s.end)) > 0
-                and t.mel_freq_overlap(s) > -200
-            ):
-                chirps += 1
-                # dont want to count twice
-                del signals[i]
-            elif s.start > end:
-                break
-            else:
-                i += 1
-        last_end = t.end
-    return tracks, length, chirps, signals, raw_length
+    # choose most specific tag first
+    first_specific = None
+    for p in ordered:
+        if p[0].what == "bird":
+            continue
+        first_specific = p
+        break
+
+    if first_specific is None and len(ordered) > 0:
+        first_specific = ordered[0]
+
+    if first_specific is None:
+        if pre_prediction is not None:
+            return pre_prediction, pre_model.model
+    return first_specific
 
 
 def signal_noise(frames, sr, hop_length=281):
@@ -713,7 +763,6 @@ def get_tracks_from_signals(signals, end):
     # just keep merging until there are no more valid merges
     merged = True
     min_mel_range = 50
-
     while merged:
         signals, merged = merge_signals(signals)
 
@@ -726,6 +775,10 @@ def get_tracks_from_signals(signals, end):
         if s.length < min_length:
             to_delete.append(s)
             continue
+
+        s.enlarge(1.4, min_track_length=min_track_length)
+        s.end = min(end, s.end)
+
         for s2 in signals:
             if s2 in to_delete:
                 continue
@@ -736,7 +789,8 @@ def get_tracks_from_signals(signals, end):
             mel_overlap = s.freq_overlap(s2)
             min_length = min(s.length, s2.length)
             # 2200 chosen on testing some files may be too leniant
-            if overlap > 0.7 * min_length and abs(mel_overlap) < 2200:
+            # was also filtering by  and abs(mel_overlap) < 2200:
+            if overlap > 0.7 * min_length:
                 s.merge(s2)
                 to_delete.append(s2)
 
@@ -744,8 +798,9 @@ def get_tracks_from_signals(signals, end):
         signals.remove(s)
     to_delete = []
     for s in signals:
-        s.enlarge(1.4, min_track_length=min_track_length)
-        s.end = min(end, s.end)
+        # doing earlier now
+        # s.enlarge(1.4, min_track_length=min_track_length)
+        # s.end = min(end, s.end)
         if s.mel_freq_range < min_mel_range:
             to_delete.append(s)
     for s in to_delete:
@@ -753,30 +808,61 @@ def get_tracks_from_signals(signals, end):
     return signals
 
 
+class Prediction:
+    def __init__(self, what, confidence, ebird_id, normalize_confidence=True):
+        self.what = what
+        if normalize_confidence:
+            self.confidence = round(100 * confidence)
+        else:
+            self.confidence = confidence
+        self.ebird_id = ebird_id
+        self.filtered = False
+
+    def get_meta(self):
+        meta = {}
+        meta["what"] = self.what
+        meta["confidence"] = self.confidence
+        meta["filtered"] = self.filtered
+        meta["ebird_id"] = self.ebird_id
+        return meta
+
+
 # TODO predictions should be moved into there own structure
 class ModelResult:
-    def __init__(self, model):
+    def __init__(self, model, pre_model):
         self.model = model
-        self.filtered_labels = []
-        self.labels = []
-        self.ebird_ids = []
-        self.confidences = []
-        self.raw_tag = None
-        self.raw_confidence = None
+        self.pre_model = pre_model
+        self.raw_prediction = None
+        # self.raw_tag = None
+        # self.raw_confidence = None
+        self.predictions = []
+
+    def add_prediction(self, what, confidence, ebird_ids, normalize_confidence=True):
+        eid = ebird_ids
+        if ebird_ids is not None and len(ebird_ids) == 0:
+            eid = None
+        p = Prediction(what, confidence, eid, normalize_confidence)
+        self.predictions.append(p)
 
     def get_meta(self):
         meta = {}
         meta["model"] = self.model
-        meta["filtered_species"] = self.filtered_labels
-        meta["species"] = self.labels
-        meta["likelihood"] = self.confidences
-        # used when no actual tag
-        if self.raw_tag is not None:
-            meta["raw_tag"] = self.raw_tag
-            meta["raw_confidence"] = self.raw_confidence
-            meta["raw_ebird_ids"] = self.ebird_ids
-        else:
-            meta["ebird_ids"] = self.ebird_ids
+        meta["pre_model"] = self.pre_model
+
+        meta["predictions"] = [p.get_meta() for p in self.predictions]
+        if self.raw_prediction is not None:
+            meta["raw_prediction"] = self.raw_prediction.get_meta()
+
+        # meta["filtered_species"] = self.filtered_labels
+        # meta["species"] = self.labels
+        # meta["likelihood"] = self.confidences
+        # # used when no actual tag
+        # if self.raw_tag is not None:
+        #     meta["raw_tag"] = self.raw_tag
+        #     meta["raw_confidence"] = self.raw_confidence
+        #     meta["raw_ebird_ids"] = self.ebird_ids
+        # else:
+        #     meta["ebird_ids"] = self.ebird_ids
 
         return meta
 
@@ -790,13 +876,23 @@ class Signal:
 
         self.mel_freq_start = mel_freq(freq_start)
         self.mel_freq_end = mel_freq(freq_end)
-        self.predictions = []
+        self.results = []
+        self.master_tag = None
+        self.master_model = None
         self.track_id = None
         # self.model = None
         # self.labels = None
         # self.confidences = None
         # self.raw_tag = None
         # self.raw_confidence = None
+
+    def set_master_tag(self):
+        master_tag = get_master_tag(self)
+        if master_tag is None:
+            return
+        master_tag, model = master_tag
+        self.master_tag = master_tag
+        self.model = model
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
@@ -878,7 +974,12 @@ class Signal:
         meta["end_s"] = self.end
         meta["freq_start"] = self.freq_start
         meta["freq_end"] = self.freq_end
-        meta["predictions"] = [r.get_meta() for r in self.predictions]
+        if self.master_tag is not None:
+            meta["master_tag"] = {
+                "prediction": self.master_tag.get_meta(),
+                "model": self.master_model,
+            }
+        meta["model_results"] = [r.get_meta() for r in self.results]
         if self.track_id is not None:
             meta["track_id"] = self.track_id
         return meta
