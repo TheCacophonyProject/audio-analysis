@@ -359,9 +359,10 @@ def species_by_location(rec_metadata):
 
 
 def examine(file_name, bird_model, analyse_tracks=False):
-    import cacophony_index
+    # import cacophony_index
 
-    summary = cacophony_index.calculate(file_name)
+    # summary = cacophony_index.calculate(file_name)
+    summary = {}
     summary.update(species_identify(file_name, bird_model, analyse_tracks))
     return summary
 
@@ -405,7 +406,10 @@ def parse_args():
 
     args = parser.parse_args()
     if args.bird_model is None or len(args.bird_model) == 0:
-        args.bird_model = ["/models/bird-model/audioModel.keras"]
+        args.bird_model = [
+            "/models/pre-model/audioModel.keras",
+            "/models/bird-model/audioModel.keras",
+        ]
 
     return args
 
