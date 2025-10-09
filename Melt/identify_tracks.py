@@ -426,7 +426,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         tracks = get_tracks_from_signals(tracks, length)
     if len(tracks) == 0:
         return [], length, [], raw_length, []
-
+    track_data = None
     mel_data = None
     bird_labels = set()
     for model_file in models:
@@ -467,30 +467,35 @@ def classify(file, models, analyse_tracks, meta_data=None):
         if model_name == "embeddings":
             data = chirp_embeddings(file, tracks, segment_stride)
         else:
-            mel_data = load_samples(
-                frames,
-                sr,
-                tracks,
-                segment_length,
-                segment_stride,
-                hop_length,
-                mean_sub=mean_sub,
-                use_mfcc=use_mfcc,
-                htk=htk,
-                mel_break=mel_break,
-                n_mels=n_mels,
-                fmin=fmin,
-                fmax=fmax,
-                channels=channels,
-                power=power,
-                db_scale=db_scale,
-                filter_freqs=filter_freqs,
-                filter_below=filter_below,
-                normalize=normalize,
-                n_fft=n_fft,
-                pad_short_tracks=pad_short,
-            )
-            data = mel_data
+            if track_data is None:
+                track_data = load_samples(
+                    frames,
+                    sr,
+                    tracks,
+                    segment_length,
+                    segment_stride,
+                    hop_length,
+                    mean_sub=mean_sub,
+                    use_mfcc=use_mfcc,
+                    htk=htk,
+                    mel_break=mel_break,
+                    n_mels=n_mels,
+                    fmin=fmin,
+                    fmax=fmax,
+                    channels=channels,
+                    power=power,
+                    db_scale=db_scale,
+                    filter_freqs=filter_freqs,
+                    filter_below=filter_below,
+                    normalize=normalize,
+                    n_fft=n_fft,
+                    pad_short_tracks=pad_short,
+                )
+            else:
+                logging.info(
+                    "Re using track data this will cuase problems if the STFT settings are not the same for multiple models"
+                )
+            data = track_data
         if len(data) == 0:
             return [], length, [], raw_length, []
 
