@@ -33,7 +33,7 @@ RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audi
 RUN tar xzvf audiomodel.tar -C /models/bird-model --strip-components=1
 
 RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/premodel.tar"
-RUN tar xzvf audiomodel.tar -C /models/pre-model --strip-components=1
+RUN tar xzvf premodel.tar -C /models/pre-model --strip-components=1
 
 
 COPY Melt /Melt
