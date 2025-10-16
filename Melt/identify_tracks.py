@@ -550,72 +550,58 @@ def classify(file, models, analyse_tracks, meta_data=None):
     return tracks, length, signals, raw_length, list(bird_labels)
 
 
+# sure prediction from master model
+# sure prediction from pre model
+# unsure prediction from master model
+# unsure prediction from pre model
 def get_master_tag(track):
     pre_model = None
     other_model = []
+    raw_preds = []
     for model_result in track.results:
         if model_result.pre_model:
             pre_model = model_result
+            continue
         for p in model_result.predictions:
             if p.filtered:
                 continue
             other_model.append((p, model_result.model))
-    pre_prediction = None
-    # assume for now pre model is just a single label
+        if model_result.raw_prediction is not None:
+            raw_preds.append((model_result.raw_prediction, model_result.model))
+    # if other model is sure choose this first
+    if len(other_model) > 0:
+        ordered = sorted(
+            other_model,
+            key=lambda prediction: (prediction[0].confidence),
+            reverse=True,
+        )
+
+        first_specific = None
+        for p in ordered:
+            if p[0].what == "bird":
+                continue
+            first_specific = p
+            break
+        if first_specific is None:
+            first_specific = ordered[0]
+        return first_specific
     if pre_model is not None:
-        filter_moreporks = False
         if len(pre_model.predictions) > 0:
             pre_prediction = pre_model.predictions[0]
             if not pre_prediction.filtered:
-                if pre_prediction.what == "noise":
-                    # always trust pre model noise prediction unless other model has a more specific type of noise i.e. "insect"
-                    other_model_prediction = next(
-                        (p for p in other_model if p[0].what in SPECIFIC_NOISE), None
-                    )
-                    if other_model_prediction is not None:
-                        return other_model_prediction
-                    return pre_prediction, pre_model.model
-                elif pre_prediction.what == "morepork":
-                    return pre_prediction, pre_model.model
-                elif pre_prediction.what == "human":
-                    return pre_prediction, pre_model.model
-            filter_moreporks = True
-            # if pre model is not morepork second model can't be, if it is just a bird pre model will say so
-        elif (
-            pre_model.raw_prediction.what in ["noise", "human"]
-            and pre_model.raw_prediction.confidence > 50
-        ):
-            # should we just accept this tag if its noise
-            filter_moreporks = True
+                return pre_prediction, pre_model.model
 
-        if filter_moreporks:
-
-            other_model = [
-                p
-                for p in other_model
-                if p[0].what != "morepork" and p[0].what != "bird"
-            ]
-    # may want some other rulse for human also will need to test what works
-    ordered = sorted(
-        other_model,
-        key=lambda prediction: (prediction[0].confidence),
-        reverse=True,
-    )
-    # choose most specific tag first
-    first_specific = None
-    for p in ordered:
-        if p[0].what == "bird":
-            continue
-        first_specific = p
-        break
-
-    if first_specific is None and len(ordered) > 0:
-        first_specific = ordered[0]
-
-    if first_specific is None:
-        if pre_prediction is not None:
-            return pre_prediction, pre_model.model
-    return first_specific
+    # should we set raw prediction as master tag...
+    if len(raw_preds) > 0:
+        ordered = sorted(
+            raw_preds,
+            key=lambda raw_pred: raw_pred[0].confidence,
+            reverse=True,
+        )
+        return ordered[0]
+    elif pre_model is not None and pre_model.raw_prediction is not None:
+        return pre_model.raw_prediction, pre_model.model
+    return None
 
 
 def signal_noise(frames, sr, hop_length=281):
@@ -897,7 +883,7 @@ class Signal:
             return
         master_tag, model = master_tag
         self.master_tag = master_tag
-        self.model = model
+        self.master_model = model
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
