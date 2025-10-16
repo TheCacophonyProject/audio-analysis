@@ -299,7 +299,7 @@ def load_model(model_path):
             meta = json.load(f)
 
         # tensorflow being difficult about custom layers
-        if meta.get("magv2", False):
+        if meta.get("magv2", True):
             from magtransformv2 import MagTransform
         else:
             from magtransform import MagTransform
