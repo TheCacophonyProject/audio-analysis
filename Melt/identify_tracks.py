@@ -589,7 +589,7 @@ def get_master_tag(track):
         if len(pre_model.predictions) > 0:
             pre_prediction = pre_model.predictions[0]
             if not pre_prediction.filtered:
-                return pre_prediction, pre_model.model
+                return pre_prediction, pre_model.model, False
 
     # should we set raw prediction as master tag...
     if len(raw_preds) > 0:
@@ -598,9 +598,9 @@ def get_master_tag(track):
             key=lambda raw_pred: raw_pred[0].confidence,
             reverse=True,
         )
-        return ordered[0]
+        return *ordered[0], True
     elif pre_model is not None and pre_model.raw_prediction is not None:
-        return pre_model.raw_prediction, pre_model.model
+        return pre_model.raw_prediction, pre_model.model, True
     return None
 
 
@@ -870,6 +870,7 @@ class Signal:
         self.results = []
         self.master_tag = None
         self.master_model = None
+        self.master_below_thresh = True
         self.track_id = None
         # self.model = None
         # self.labels = None
@@ -881,9 +882,10 @@ class Signal:
         master_tag = get_master_tag(self)
         if master_tag is None:
             return
-        master_tag, model = master_tag
+        master_tag, model, below_thresh = master_tag
         self.master_tag = master_tag
         self.master_model = model
+        self.master_below_thresh = below_thresh
 
     def to_array(self, decimals=1):
         a = [self.start, self.end, self.freq_start, self.freq_end]
@@ -967,6 +969,7 @@ class Signal:
         meta["freq_end"] = self.freq_end
         if self.master_tag is not None:
             meta["master_tag"] = {
+                "below_thresh": self.master_below_thresh,
                 "prediction": self.master_tag.get_meta(),
                 "model": self.master_model,
             }
