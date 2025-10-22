@@ -77,13 +77,13 @@ def load_samples(
     fmin=50,
     fmax=11000,
     channels=1,
-    power=1,
+    power=2,
     db_scale=False,
-    filter_freqs=True,
+    filter_freqs=False,
     filter_below=None,
     normalize=True,
     n_fft=4096,
-    pad_short_tracks=True,
+    pad_short_tracks=False,
 ):
     logging.debug(
         "Loading samples with length %s stride %s hop length %s and mean_sub %s mfcc %s break %s htk %s n mels %s fmin %s fmax %s filtering freqs %s filter below %s n_fft %s pad short tracks %s",
@@ -431,8 +431,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
     bird_labels = set()
     for model_file in models:
         model, meta = load_model(Path(model_file))
-        filter_freqs = meta.get("filter_freq", True)
-        filter_below = meta.get("filter_below", 1000)
+        filter_freqs = meta.get("filter_freq", False)
+        filter_below = meta.get("filter_below", None)
 
         ebird_ids = meta.get("ebird_ids")
         labels = meta.get("labels")
@@ -445,7 +445,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
         use_mfcc = meta.get("use_mfcc", False)
         n_mels = meta.get("n_mels", 160)
 
-        pad_short = meta.get("pad_short_tracks", True)
+        pad_short = meta.get("pad_short_tracks", False)
         mel_break = meta.get("break_freq", 1750)
         htk = meta.get("htk", False)
         fmin = meta.get("fmin", 50)
