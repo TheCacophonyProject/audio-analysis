@@ -584,7 +584,7 @@ def get_master_tag(track):
             break
         if first_specific is None:
             first_specific = ordered[0]
-        return first_specific
+        return *first_specific, False
     if pre_model is not None:
         if len(pre_model.predictions) > 0:
             pre_prediction = pre_model.predictions[0]
