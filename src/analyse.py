@@ -408,7 +408,8 @@ def parse_args():
     if args.bird_model is None or len(args.bird_model) == 0:
         args.bird_model = [
             "/models/pre-model/audioModel.keras",
-            "/models/bird-model/audioModel.keras",
+            "/models/bird-model-v2m/audioModel.keras",
+            "/models/bird-model-v2b3/audioModel.keras",
         ]
 
     return args
