@@ -609,6 +609,7 @@ def get_master_tag(track):
         if model_result.raw_prediction is not None:
             raw_preds.append((model_result.raw_prediction, model_result.model))
     # if other model is sure choose this first
+    first_specific = None
     if len(other_model) > 0:
         ordered = sorted(
             other_model,
@@ -624,13 +625,24 @@ def get_master_tag(track):
             break
         if first_specific is None:
             first_specific = ordered[0]
-        return *first_specific, False
+
+    pre_pred = None
     if pre_model is not None:
         if len(pre_model.predictions) > 0:
             pre_prediction = pre_model.predictions[0]
             if not pre_prediction.filtered:
-                return pre_prediction, pre_model.model, False
+                pre_pred = (pre_prediction, pre_model.model)
+                # return pre_prediction, pre_model.model, False
 
+    if first_specific is None and pre_pred is not None:
+        return *pre_pred, False
+    # choose noise over morepork
+    if first_specific is not None and pre_pred is not None:
+        is_morepork = first_specific[0].what == "morepork"
+        is_noise = pre_pred[0].what == "noise"
+        if is_morepork and is_noise:
+            return *pre_pred, False
+        return *first_specific, False
     # should we set raw prediction as master tag...
     if len(raw_preds) > 0:
         ordered = sorted(
