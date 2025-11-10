@@ -488,10 +488,9 @@ def classify(file, models, analyse_tracks, meta_data=None):
         bird_species = meta.get("bird_species", DEFAULT_SPECIES)
         channels = meta.get("channels", 1)
         prob_thresh = meta.get("threshold", 0.7)
-        bird_thresh = meta.get("bird_thresh", 0.5)
+        # bird_thresh = meta.get("bird_thresh", 0.5)
         n_fft = meta.get("n_fft", 4096)
         pre_model = meta.get("pre_model", False)
-
         bird_labels.update(model_bird_labels)
         if n_fft is None:
             n_fft = 4096
@@ -553,23 +552,6 @@ def classify(file, models, analyse_tracks, meta_data=None):
             max_p = None
             result = ModelResult(model_name, pre_model)
             t.results.append(result)
-            bird_prob = 0
-
-            # just sum up confidences of all bird species as add generic tag
-            # if threshold is met, probably will use seperate model for this in future
-            if not multi_label and "bird" not in labels:
-                for p in predictions:
-                    max_i = np.argmax(p)
-                    if bird_indexes[max_i]:
-                        bird_prob += p[max_i]
-                if len(predictions) > 0:
-                    bird_prob = bird_prob / len(predictions)
-                if bird_prob > bird_thresh:
-                    result.add_prediction("bird", bird_prob, None)
-                    # result.labels.append("bird")
-                    # if ebird_ids is not None:
-                    #     result.ebird_ids.append([])
-                    # result.confidences.append(round(bird_prob * 100))
 
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
@@ -639,10 +621,18 @@ def get_master_tag(track):
     # choose noise over morepork
     if first_specific is not None and pre_pred is not None:
         is_morepork = first_specific[0].what == "morepork"
-        is_noise = pre_pred[0].what == "noise"
+        is_noise = pre_pred[0].what in ["human", "noise"]
         if is_morepork and is_noise:
+            logging.debug(
+                "Overiding more pork because pre is noise/human %s %s",
+                pre_pred[0].what,
+                pre_pred[0].confidence,
+            )
             return *pre_pred, False
         return *first_specific, False
+    elif first_specific is not None:
+        return *first_specific, False
+
     # should we set raw prediction as master tag...
     if len(raw_preds) > 0:
         ordered = sorted(
