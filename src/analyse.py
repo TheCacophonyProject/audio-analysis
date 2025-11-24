@@ -3,8 +3,6 @@
 
 # Copyright (C) 2019 Chris Blackbourn
 
-"""For internal use only, see melt.py instead."""
-
 import sys
 import time
 
@@ -295,7 +293,7 @@ def merge_neighbours(square, species_meta):
 
 def species_by_location(rec_metadata):
 
-    species_file = Path("./Melt/ebird_species.json")
+    species_file = Path("./src/ebird_species.json")
     if species_file.exists():
         with species_file.open("r") as f:
             species_data = json.load(f)
@@ -317,7 +315,7 @@ def species_by_location(rec_metadata):
                 species_list.update(species_info["species"])
         species_list = list(species_list)
     else:
-        species_square_file = Path("./Melt/ebird_species_per_square.json")
+        species_square_file = Path("./src/ebird_species_per_square.json")
         lat = location_data.get("lat")
         lng = location_data.get("lng")
         if species_square_file.exists():
