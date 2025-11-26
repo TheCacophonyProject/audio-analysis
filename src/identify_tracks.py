@@ -553,6 +553,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             result = ModelResult(model_name, pre_model)
             t.results.append(result)
 
+            # this could be simpler if we assume not doing a multi label model
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
                     max_p = (i, p)
@@ -560,7 +561,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                     ebird_id = None
                     if ebird_ids is not None:
                         ebird_id = ebird_ids[i]
-                    result.add_prediction(labels[i], p, ebird_id)
+                    result.add_prediction(labels[i], p, ebird_id, prob_thresh)
 
             if len(result.predictions) == 0:
                 # use max prediction
@@ -842,7 +843,9 @@ def get_tracks_from_signals(signals, end):
 
 
 class Prediction:
-    def __init__(self, what, confidence, ebird_id, normalize_confidence=True):
+    def __init__(
+        self, what, confidence, ebird_id, threshold_used=None, normalize_confidence=True
+    ):
         self.what = what
         if normalize_confidence:
             self.confidence = round(100 * confidence)
@@ -850,13 +853,16 @@ class Prediction:
             self.confidence = confidence
         self.ebird_id = ebird_id
         self.filtered = False
+        self.threshold_used = threshold_used
 
     def get_meta(self):
         meta = {}
-        meta["what"] = self.what
+        meta["label"] = self.what
         meta["confidence"] = self.confidence
         meta["filtered"] = self.filtered
         meta["ebird_id"] = self.ebird_id
+        meta["threshold_used"] = self.threshold_used
+
         return meta
 
 
@@ -869,11 +875,18 @@ class ModelResult:
         # self.raw_confidence = None
         self.predictions = []
 
-    def add_prediction(self, what, confidence, ebird_ids, normalize_confidence=True):
+    def add_prediction(
+        self,
+        what,
+        confidence,
+        ebird_ids,
+        threshold_used,
+        normalize_confidence=True,
+    ):
         eid = ebird_ids
         if ebird_ids is not None and len(ebird_ids) == 0:
             eid = None
-        p = Prediction(what, confidence, eid, normalize_confidence)
+        p = Prediction(what, confidence, eid, threshold_used, normalize_confidence)
         self.predictions.append(p)
 
     def get_meta(self):

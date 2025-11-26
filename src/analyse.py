@@ -225,10 +225,18 @@ def filter_by_location(meta_data, tracks):
                                 if p.filtered
                             ]
                         )
+                        threshold_used = max(
+                            [
+                                p.threshold_used
+                                for p in model_result.predictions
+                                if p.threshold_used
+                            ]
+                        )
                         model_result.add_prediction(
                             "bird",
                             confidence,
                             None,
+                            threshold_used,
                             normalize_confidence=False,
                         )
 
