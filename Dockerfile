@@ -31,7 +31,7 @@ RUN rm -rf /tmp/workdir
 RUN mkdir /models/bird-model-v2m -p
 RUN mkdir /models/pre-model -p
 RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/audioModel.tar"
-RUN tar xzvf audioModel.tar -C /models/bird-model-v2m --strip-components=2
+RUN tar xzvf audioModel.tar -C /models/bird-model-v2m --strip-components=1
 
 RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/premodel.tar"
 RUN tar xzvf premodel.tar -C /models/pre-model --strip-components=1
