@@ -415,7 +415,6 @@ def parse_args():
         args.bird_model = [
             "/models/pre-model/audioModel.keras",
             "/models/bird-model-v2m/audioModel.keras",
-            "/models/bird-model-v2b3/audioModel.keras",
         ]
 
     return args

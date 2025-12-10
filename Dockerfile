@@ -1,6 +1,6 @@
 FROM tensorflow/tensorflow:2.19.0
 
-ARG MODEL_VERSION="0.7"
+ARG MODEL_VERSION="0.8"
 
 
 RUN apt-get update && apt-get install ffmpeg -y
@@ -30,12 +30,8 @@ RUN rm -rf /tmp/workdir
 
 RUN mkdir /models/bird-model-v2m -p
 RUN mkdir /models/pre-model -p
-RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/audiomodelv2m.tar"
-RUN tar xzvf audiomodelv2m.tar -C /models/bird-model-v2m --strip-components=2
-
-RUN mkdir /models/bird-model-v2b3 -p
-RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/audiomodelv2b3.tar"
-RUN tar xzvf audiomodelv2b3.tar -C /models/bird-model-v2b3 --strip-components=2
+RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/audioModel.tar"
+RUN tar xzvf audioModel.tar -C /models/bird-model-v2m --strip-components=1
 
 RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/premodel.tar"
 RUN tar xzvf premodel.tar -C /models/pre-model --strip-components=1
