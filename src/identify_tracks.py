@@ -554,7 +554,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
             t.results.append(result)
 
             sorted_args = np.argsort(prediction)
-            clairty = prediction[sorted_args[-1]] - prediction[sorted_args[-2]]
+            clarity = prediction[sorted_args[-1]] - prediction[sorted_args[-2]]
             # this could be simpler if we assume not doing a multi label model
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
@@ -564,7 +564,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                     if ebird_ids is not None:
                         ebird_id = ebird_ids[i]
                     result.add_prediction(
-                        labels[i], p, ebird_id, clairty, threshold_used=prob_thresh
+                        labels[i], p, ebird_id, clarity, threshold_used=prob_thresh
                     )
 
             if len(result.predictions) == 0:
@@ -573,7 +573,7 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 if ebird_ids is not None:
                     ebird_id = ebird_ids[max_p[0]]
                 result.raw_prediction = Prediction(
-                    labels[max_p[0]], max_p[1], ebird_id, clairty
+                    labels[max_p[0]], max_p[1], ebird_id, clarity
                 )
 
     return tracks, length, signals, raw_length, list(bird_labels)
@@ -894,7 +894,7 @@ class ModelResult:
         what,
         confidence,
         ebird_ids,
-        clairty,
+        clarity,
         threshold_used,
         normalize_confidence=False,
     ):
@@ -902,7 +902,7 @@ class ModelResult:
         if ebird_ids is not None and len(ebird_ids) == 0:
             eid = None
         p = Prediction(
-            what, confidence, eid, clairty, threshold_used, normalize_confidence
+            what, confidence, eid, clarity, threshold_used, normalize_confidence
         )
         self.predictions.append(p)
 
