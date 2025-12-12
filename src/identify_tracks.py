@@ -129,7 +129,7 @@ def load_samples(
         else:
             missing = sample_size - (sr_end - sr_start)
             if missing > 0:
-                offset = missing //2
+                offset = missing // 2
                 sr_start = sr_start - offset
 
                 if sr_start <= 0:
@@ -655,9 +655,25 @@ def get_master_tag(track):
 
 def signal_noise(frames, sr, hop_length=281):
     # frames = frames[:sr]
-    n_fft = 4096
+    n_fft = 2048
     # frames = frames[: sr * 3]
     spectogram = np.abs(librosa.stft(frames, n_fft=n_fft, hop_length=hop_length))
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    lower_bin = None
+    upper_bin = 0
+    freq_range = 100
+    height = 0
+
+    for i, f in enumerate(freqs):
+        if f > 100 and lower_bin is None:
+            lower_bin = i - 1
+        if f > 20000:
+            upper_bin = i
+            break
+        if f > freq_range and height == 0:
+            height = i + 1
+    spectogram[:lower_bin, :] = 0
+    spectogram[upper_bin:, :] = 0
 
     a_max = np.amax(spectogram)
     spectogram = spectogram / a_max
@@ -670,7 +686,7 @@ def signal_noise(frames, sr, hop_length=281):
     row_medians = np.repeat(row_medians, columns, axis=1)
     column_medians = np.repeat(column_medians, rows, axis=0)
 
-    signal = (spectogram > 3 * column_medians) & (spectogram > 3 * row_medians)
+    signal = (spectogram > 2 * column_medians) & (spectogram > 3 * row_medians)
 
     signal = signal.astype(np.uint8)
     kernel = np.ones((4, 4), np.uint8)
@@ -678,13 +694,6 @@ def signal_noise(frames, sr, hop_length=281):
 
     width = SIGNAL_WIDTH * sr / hop_length
     width = int(width)
-    freq_range = 100
-    height = 0
-    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-    for i, f in enumerate(freqs):
-        if f > freq_range:
-            height = i + 1
-            break
 
     signal = cv2.dilate(signal, np.ones((height, width), np.uint8))
     signal = cv2.erode(signal, np.ones((height // 10, width), np.uint8))
