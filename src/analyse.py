@@ -232,14 +232,14 @@ def filter_by_location(meta_data, tracks):
                                 if p.threshold_used
                             ]
                         )
-                        clairty = max(
-                            [p.clairty for p in model_result.predictions if p.clairty]
+                        clarity = max(
+                            [p.clarity for p in model_result.predictions if p.clarity]
                         )
                         model_result.add_prediction(
                             "bird",
                             confidence,
                             None,
-                            clairty,
+                            clarity,
                             threshold_used,
                             normalize_confidence=False,
                         )
