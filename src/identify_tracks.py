@@ -879,7 +879,7 @@ class Prediction:
 
     def get_meta(self):
         meta = {}
-        meta["label"] = self.what
+        meta["tag"] = self.what
         meta["confidence"] = self.confidence
         meta["filtered"] = self.filtered
         meta["ebird_id"] = self.ebird_id
