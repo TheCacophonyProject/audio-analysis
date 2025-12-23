@@ -816,12 +816,12 @@ def get_tracks_from_signals(signals, end):
         signals, merged = merge_signals(signals)
 
     to_delete = []
-    min_length = 0.35
+    min_length_base = 0.35
     min_track_length = 0.7
     for s in signals:
         if s in to_delete:
             continue
-        if s.length < min_length:
+        if s.length < min_length_base:
             to_delete.append(s)
             continue
 
