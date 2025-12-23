@@ -812,6 +812,7 @@ def get_tracks_from_signals(signals, end):
     # just keep merging until there are no more valid merges
     merged = True
     min_mel_range = 50
+    max_length = 6
     while merged:
         signals, merged = merge_signals(signals)
 
@@ -854,7 +855,23 @@ def get_tracks_from_signals(signals, end):
             to_delete.append(s)
     for s in to_delete:
         signals.remove(s)
-    return signals
+
+    final_signals = []
+    for s in signals:
+        if s.length > max_length:
+            splits = math.ceil(s.length / max_length)
+            length = s.length / splits
+            start = s.start
+            for _ in range(splits):
+                new_signal = s.copy()
+                new_signal.start = start
+                new_signal.end = start + length
+                final_signals.append(new_signal)
+                start = new_signal.end
+        else:
+            final_signals.append(s)
+
+    return final_signals
 
 
 class Prediction:
