@@ -171,7 +171,7 @@ def species_identify(file_name, bird_models, analyse_tracks):
                 }
     result["non_bird_tags"] = NON_BIRD
     result["species_identify"] = labels
-    result["species_identify_version"] = "2021-02-01"
+    result["species_identify_version"] = "2025-12-24"
     return result
 
 
