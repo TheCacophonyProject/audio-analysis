@@ -6,13 +6,13 @@
 import sys
 import time
 
-import common
 from identify_tracks import classify, get_max_chirps, NON_BIRD, segment_overlap
 import math
 from pathlib import Path
 import argparse
 import json
 import logging
+import numpy as np
 
 
 def calc_cacophony_index(tracks, length):
@@ -171,7 +171,7 @@ def species_identify(file_name, bird_models, analyse_tracks):
                 }
     result["non_bird_tags"] = NON_BIRD
     result["species_identify"] = labels
-    result["species_identify_version"] = "2025-12-01"
+    result["species_identify_version"] = "2025-12-24"
     return result
 
 
@@ -232,10 +232,14 @@ def filter_by_location(meta_data, tracks):
                                 if p.threshold_used
                             ]
                         )
+                        clarity = max(
+                            [p.clarity for p in model_result.predictions if p.clarity]
+                        )
                         model_result.add_prediction(
                             "bird",
                             confidence,
                             None,
+                            clarity,
                             threshold_used,
                             normalize_confidence=False,
                         )
@@ -452,7 +456,7 @@ def main():
 
     summary["processing_time_seconds"] = round(t1 - t0, 1)
     if args.meta_to_stdout:
-        print(common.jsdump(summary))
+        print(json.dumps(summary, cls=RoundFloats, sort_keys=True, indent=4))
     else:
         audio_file = Path(args.file)
         metadata_file = audio_file.with_suffix(".txt")
@@ -465,9 +469,18 @@ def main():
             metadata = {}
         metadata["analysis_result"] = summary
         with metadata_file.open("w") as f:
-            json.dump(metadata, f, sort_keys=True, indent=4)
+            json.dump(metadata, f, sort_keys=True, cls=RoundFloats, indent=4)
 
     return
+
+
+class RoundFloats(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, np.floating):
+            return float(round(o, 2))
+        elif isinstance(o, float):
+            return round(o, 2)
+        return json.JSONEncoder.default(self, o)
 
 
 def init_logging():

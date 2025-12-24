@@ -129,7 +129,7 @@ def load_samples(
         else:
             missing = sample_size - (sr_end - sr_start)
             if missing > 0:
-                offset = np.random.randint(0, missing)
+                offset = missing // 2
                 sr_start = sr_start - offset
 
                 if sr_start <= 0:
@@ -553,6 +553,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
             result = ModelResult(model_name, pre_model)
             t.results.append(result)
 
+            sorted_args = np.argsort(prediction)
+            clarity = prediction[sorted_args[-1]] - prediction[sorted_args[-2]]
             # this could be simpler if we assume not doing a multi label model
             for i, p in enumerate(prediction):
                 if max_p is None or p > max_p[1]:
@@ -561,14 +563,18 @@ def classify(file, models, analyse_tracks, meta_data=None):
                     ebird_id = None
                     if ebird_ids is not None:
                         ebird_id = ebird_ids[i]
-                    result.add_prediction(labels[i], p, ebird_id, prob_thresh)
+                    result.add_prediction(
+                        labels[i], p, ebird_id, clarity, threshold_used=prob_thresh
+                    )
 
             if len(result.predictions) == 0:
                 # use max prediction
                 ebird_id = None
                 if ebird_ids is not None:
                     ebird_id = ebird_ids[max_p[0]]
-                result.raw_prediction = Prediction(labels[max_p[0]], max_p[1], ebird_id)
+                result.raw_prediction = Prediction(
+                    labels[max_p[0]], max_p[1], ebird_id, clarity
+                )
 
     return tracks, length, signals, raw_length, list(bird_labels)
 
@@ -649,9 +655,25 @@ def get_master_tag(track):
 
 def signal_noise(frames, sr, hop_length=281):
     # frames = frames[:sr]
-    n_fft = 4096
+    n_fft = 2048
     # frames = frames[: sr * 3]
     spectogram = np.abs(librosa.stft(frames, n_fft=n_fft, hop_length=hop_length))
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    lower_bin = None
+    upper_bin = 0
+    freq_range = 100
+    height = 0
+
+    for i, f in enumerate(freqs):
+        if f > 100 and lower_bin is None:
+            lower_bin = i - 1
+        if f > 20000:
+            upper_bin = i
+            break
+        if f > freq_range and height == 0:
+            height = i + 1
+    spectogram[:lower_bin, :] = 0
+    spectogram[upper_bin:, :] = 0
 
     a_max = np.amax(spectogram)
     spectogram = spectogram / a_max
@@ -664,7 +686,7 @@ def signal_noise(frames, sr, hop_length=281):
     row_medians = np.repeat(row_medians, columns, axis=1)
     column_medians = np.repeat(column_medians, rows, axis=0)
 
-    signal = (spectogram > 3 * column_medians) & (spectogram > 3 * row_medians)
+    signal = (spectogram > 2 * column_medians) & (spectogram > 3 * row_medians)
 
     signal = signal.astype(np.uint8)
     kernel = np.ones((4, 4), np.uint8)
@@ -672,13 +694,6 @@ def signal_noise(frames, sr, hop_length=281):
 
     width = SIGNAL_WIDTH * sr / hop_length
     width = int(width)
-    freq_range = 100
-    height = 0
-    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-    for i, f in enumerate(freqs):
-        if f > freq_range:
-            height = i + 1
-            break
 
     signal = cv2.dilate(signal, np.ones((height, width), np.uint8))
     signal = cv2.erode(signal, np.ones((height // 10, width), np.uint8))
@@ -797,16 +812,17 @@ def get_tracks_from_signals(signals, end):
     # just keep merging until there are no more valid merges
     merged = True
     min_mel_range = 50
+    max_length = 6
     while merged:
         signals, merged = merge_signals(signals)
 
     to_delete = []
-    min_length = 0.35
+    min_length_base = 0.35
     min_track_length = 0.7
     for s in signals:
         if s in to_delete:
             continue
-        if s.length < min_length:
+        if s.length < min_length_base:
             to_delete.append(s)
             continue
 
@@ -839,12 +855,34 @@ def get_tracks_from_signals(signals, end):
             to_delete.append(s)
     for s in to_delete:
         signals.remove(s)
-    return signals
+
+    final_signals = []
+    for s in signals:
+        if s.length > max_length:
+            splits = math.ceil(s.length / max_length)
+            length = s.length / splits
+            start = s.start
+            for _ in range(splits):
+                new_signal = s.copy()
+                new_signal.start = start
+                new_signal.end = start + length
+                final_signals.append(new_signal)
+                start = new_signal.end
+        else:
+            final_signals.append(s)
+
+    return final_signals
 
 
 class Prediction:
     def __init__(
-        self, what, confidence, ebird_id, threshold_used=None, normalize_confidence=True
+        self,
+        what,
+        confidence,
+        ebird_id,
+        clarity,
+        threshold_used=None,
+        normalize_confidence=False,
     ):
         self.what = what
         if normalize_confidence:
@@ -853,14 +891,16 @@ class Prediction:
             self.confidence = confidence
         self.ebird_id = ebird_id
         self.filtered = False
+        self.clarity = clarity
         self.threshold_used = threshold_used
 
     def get_meta(self):
         meta = {}
-        meta["label"] = self.what
+        meta["tag"] = self.what
         meta["confidence"] = self.confidence
         meta["filtered"] = self.filtered
         meta["ebird_id"] = self.ebird_id
+        meta["clarity"] = self.clarity
         meta["threshold_used"] = self.threshold_used
 
         return meta
@@ -880,13 +920,16 @@ class ModelResult:
         what,
         confidence,
         ebird_ids,
+        clarity,
         threshold_used,
-        normalize_confidence=True,
+        normalize_confidence=False,
     ):
         eid = ebird_ids
         if ebird_ids is not None and len(ebird_ids) == 0:
             eid = None
-        p = Prediction(what, confidence, eid, threshold_used, normalize_confidence)
+        p = Prediction(
+            what, confidence, eid, clarity, threshold_used, normalize_confidence
+        )
         self.predictions.append(p)
 
     def get_meta(self):
