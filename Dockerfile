@@ -37,6 +37,7 @@ RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audi
 RUN tar xzvf premodel.tar -C /models/pre-model --strip-components=1
 
 RUN mkdir -p /etc/cacophony
+COPY ready.sh .
 COPY src /src
 RUN mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

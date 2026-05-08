@@ -59,13 +59,8 @@ def parse_args():
 
 
 def test_socket(sock, address):
-    try:
-        sock.connect(address)
-        logging.info("Classify service is ready")
-        return True
-    except:
-        logging.error("Classify service is loading", exc_info=True)
-        return False
+    sock.connect(address)
+    return True
 
 
 def main():

@@ -87,7 +87,10 @@ def classify_job(models, clientsocket, addr):
 
     try:
         job = read_all(clientsocket).decode()
-        print("Received job", job)
+        logging.info("Received job %s", job)
+        if len(job) == 0:
+            logging.error("Client disconnected")
+            return
         args = json.loads(job)
         try:
             job = ClassifyJob.from_dict(**args)
