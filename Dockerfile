@@ -13,7 +13,7 @@ RUN apt-get update && \
 RUN apt-get update
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Pacific/Auckland
-RUN apt-get install -y python3-opencv
+RUN apt-get install -y python3-opencv supervisor
 RUN curl -q https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
   python3 get-pip.py --quiet --no-cache-dir
 
@@ -36,6 +36,11 @@ RUN tar xzvf audioModel.tar -C /models/bird-model-v2m --strip-components=1
 RUN wget "https://github.com/TheCacophonyProject/AI-Model/releases/download/audio-v$MODEL_VERSION/premodel.tar"
 RUN tar xzvf premodel.tar -C /models/pre-model --strip-components=1
 
-
+RUN mkdir -p /etc/cacophony
 COPY src /src
-ENTRYPOINT ["python3","/src/analyse.py"]
+RUN mkdir -p /var/log/supervisor
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+
+WORKDIR /
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf", "-n"]

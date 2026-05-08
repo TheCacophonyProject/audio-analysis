@@ -288,45 +288,6 @@ def get_spect(
     return mel
 
 
-def load_model_meta(model_path):
-    if model_path.is_file():
-        meta_file = model_path.parent / "metadata.txt"
-    else:
-        meta_file = model_path / "metadata.txt"
-
-    with open(meta_file, "r") as f:
-        meta = json.load(f)
-    return meta
-
-
-def load_model(model_path, meta):
-    try:
-        #     if model_path.is_file():
-        #         meta_file = model_path.parent / "metadata.txt"
-        #     else:
-        #         meta_file = model_path / "metadata.txt"
-
-        #     with open(meta_file, "r") as f:
-        #         meta = json.load(f)
-
-        # tensorflow being difficult about custom layers
-        if meta.get("magv2", True):
-            from magtransformv2 import MagTransform
-        else:
-            from magtransform import MagTransform
-
-        model_path = Path(model_path)
-        logging.info("Loading %s", str(model_path))
-        model = tf.keras.models.load_model(
-            str(model_path),
-        )
-
-    except Exception as e:
-        logging.info("Could not load model", exc_info=True)
-        raise e
-    return model
-
-
 def get_chirp_samples(rec_data, tracks, sr=32000, stride=1, length=5):
     start = 0
 
@@ -443,26 +404,19 @@ def classify(file, models, analyse_tracks, meta_data=None):
 
     pre_models = []
     mean_models = []
-    for model_file in models:
-        meta = load_model_meta(Path(model_file))
-        if meta.get("pre_model", False):
-            pre_models.append((model_file, meta))
+    for model in models:
+        if model.pre_model:
+            pre_models.append(model)
         else:
-            mean_models.append((model_file, meta))
+            mean_models.append(model)
 
     grouped_models = [mean_models]
     if len(pre_models) > 0:
         grouped_models.append(pre_models)
-    for model_group in grouped_models:
-        predict_models = []
-        if len(model_group) > 1:
+    for predict_models in grouped_models:
+        if len(predict_models) > 1:
             logging.info("Meaning predictions as have multiple models")
-        for model_f in model_group:
-            meta = model_f[1]
-            model = load_model(Path(model_f[0]), meta)
-            predict_models.append((model, meta))
-
-        meta = predict_models[0][1]
+        meta = predict_models[0].meta
         filter_freqs = meta.get("filter_freq", False)
         filter_below = meta.get("filter_below", None)
 
@@ -540,8 +494,8 @@ def classify(file, models, analyse_tracks, meta_data=None):
                 d = np.repeat(d, 3, -1)
 
             all_predictions = []
-            for model, _ in predict_models:
-                predictions = model.predict(np.array(d))
+            for model in predict_models:
+                predictions = model.model.predict(np.array(d))
                 all_predictions.append(predictions)
 
             if len(all_predictions) > 0:

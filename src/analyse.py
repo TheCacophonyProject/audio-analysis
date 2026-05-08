@@ -13,6 +13,8 @@ import argparse
 import json
 import logging
 import numpy as np
+from model import Model
+from logs import init_logging
 
 
 def calc_cacophony_index(tracks, length):
@@ -368,15 +370,6 @@ def species_by_location(rec_metadata):
     return species_list, region_code
 
 
-def examine(file_name, bird_model, analyse_tracks=False):
-    # import cacophony_index
-
-    # summary = cacophony_index.calculate(file_name)
-    summary = {}
-    summary.update(species_identify(file_name, bird_model, analyse_tracks))
-    return summary
-
-
 def none_or_str(value):
     if value.lower() in ["none", "null"]:
         return None
@@ -391,12 +384,6 @@ def parse_args():
         action="count",
         help="Print metadata to stdout instead of saving to file.",
     )
-    parser.add_argument(
-        "--old-cacophony-index",
-        action="count",
-        help="Calculate old cacophony index on this file",
-    )
-
     parser.add_argument(
         "--bird-model",
         # default=["/models/bird-model"],
@@ -441,16 +428,11 @@ def main():
     t0 = time.time()
     summary = None
 
-    if args.old_cacophony_index:
-        import cacophony_index
-
-        summary = cacophony_index.calculate(args.file)
-    else:
-        summary = examine(
-            args.file,
-            args.bird_model,
-            analyse_tracks=args.analyse_tracks,
-        )
+    models = []
+    for model_file in args.bird_model:
+        model = Model(model_file)
+        models.append(model)
+    summary = species_identify(args.file, models, args.analyse_tracks)
 
     t1 = time.time()
 
@@ -481,15 +463,6 @@ class RoundFloats(json.JSONEncoder):
         elif isinstance(o, float):
             return round(o, 2)
         return json.JSONEncoder.default(self, o)
-
-
-def init_logging():
-
-    fmt = "%(process)d %(thread)s:%(levelname)7s %(message)s"
-
-    logging.basicConfig(
-        stream=sys.stderr, level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S"
-    )
 
 
 if __name__ == "__main__":
