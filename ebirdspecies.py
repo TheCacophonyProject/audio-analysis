@@ -2,7 +2,6 @@ import requests
 import time
 import json
 
-
 # save ebird species list per region of nz
 api_url = "https://api.ebird.org/v2/product/spplist/{}"
 
